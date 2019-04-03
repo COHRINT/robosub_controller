@@ -1,0 +1,120 @@
+# center of mass
+x_m: 0.0
+y_m: 0.0
+z_m: 0.0
+# center of buoyancy
+x_b: 0.0
+y_b: 0.0
+z_b: 0.0
+# gravity (m/s^2)
+g: 9.81
+# density of water (kg/m^3)
+rho: 997.0
+# buoyancy force
+Fb: 0.0
+# moments of inertia
+Ixx: 0.0
+Iyy: 0.0
+Izz: 0.0
+# locations of motors
+T_L:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+T_R:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+T_F:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+T_B:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+T_FR:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+T_FL:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+T_BR:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+T_BL:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+# Drag coefficients
+Cd_x: 0.0
+Cd_y: 0.0
+Cd_z: 0.0
+
+# top, bottom, left, right
+# intersection of y along x axis
+Cd_xT: 0.0
+Cd_xB: 0.0
+# intersection of z along x axis
+Cd_xR: 0.0
+Cd_xL: 0.0
+
+# top, bottom, front, back
+# intersectoin of x along y axis
+Cd_yT: 0.0
+Cd_yB: 0.0
+# intersectoin of z along y axis
+Cd_yF: 0.0
+Cd_yBa: 0.0
+
+# left, righ, front, back
+# intersectoin of x along z axis
+Cd_zL: 0.0
+Cd_zR: 0.0
+# intersectoin of y along z axis
+Cd_zF: 0.0
+Cd_zB: 0.0
+
+# Surface areas
+A_x: 0.0
+A_y: 0.0
+A_z: 0.0
+
+# top, bottom, left, right
+A_xT: 0.0
+A_xB: 0.0
+A_xR: 0.0
+A_xL: 0.0
+
+# top, bottom, front, back
+A_yT: 0.0
+A_yB: 0.0
+A_yF: 0.0
+A_yBa: 0.0
+
+# left, righ, front, back
+A_zL: 0.0
+A_zR: 0.0
+A_zF: 0.0
+A_zB: 0.0
+
+# Moment arm lengths
+# how to read:
+# dz_xT = distance along z axis to center of top slice viewed in the x direction
+dz_xT: 0.0
+dz_xB: 0.0
+dy_xR: 0.0
+dy_xL: 0.0
+
+dz_yT: 0.0
+dz_yB: 0.0
+dx_yF: 0.0
+dx_yBa: 0.0
+
+dy_zL: 0.0
+dy_zR: 0.0
+dx_zF: 0.0
+dx_zB: 0.0
