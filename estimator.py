@@ -2,6 +2,7 @@ from __future__ import division
 import numpy as np
 from scipy import integrate
 import rospy
+from math import *
 
 class UKF(object):
     def __init__(self):
@@ -63,9 +64,9 @@ class UKF(object):
         T_BLy=cfg['T_BL']['y']
         T_BLz=cfg['T_BL']['z']
 
-        self.dx_B=x_b-x_m
-        self.dy_B=y_b-y_m
-        self.dz_B=z_b-z_m
+        self.dx_b=x_b-x_m
+        self.dy_b=y_b-y_m
+        self.dz_b=z_b-z_m
 
         self.dx_F=T_Fx-x_m
         self.dy_F=T_Fy-y_m
@@ -177,12 +178,27 @@ class UKF(object):
 
     def make_constants(self):
         '''function designed to compute common strings
-        of constants used in all matricies to speed up
+        of constants used in EOM to speed up
         computation
         Input: constants-constants from modeling/config
         file'''
 
-        pass
+        self.phi_R=cos(atan(self.dz_FR/self.dy_FR))*sqrt(self.dz_FR^2+self.dy_FR^2)
+        self.phi_L=cos(atan(self.dz_FL/self.dy_FL))*sqrt(self.dz_FL^2+self.dy_FL^2)
+        self.phi_bz=cos(atan(self.dy_b/self.dz_b))*sqrt(self.dz_b^2+self.dy_b^2)
+        self.phi_by=cos(atan(self.dz_b/self.dy_b))*sqrt(self.dz_b^2+self.dy_b^2)
+
+        self.theta_F=cos(atan(self.dz_FR/self.dx_FR))*sqrt(self.dz_FR^2+self.dx_FR^2)
+        self.theta_B=cos(atan(self.dz_BL/self.dx_BL))*sqrt(self.dz_BL^2+self.dx_BL^2)
+        self.theta_bx=cos(atan(self.dz_b/self.dx_b))*sqrt(self.dz_b^2+self.dx_b^2)
+        self.theta_bz=cos(atan(self.dx_b/self.dz_b))*sqrt(self.dz_b^2+self.dx_b^2)
+
+        self.psi_L=cos(atan(self.dx_L/self.dy_L))*sqrt(self.dy_R^2+self.dx_R^2)
+        self.psi_R=cos(atan(self.dx_R/self.dy_R))*sqrt(self.dy_L^2+self.dx_L^2)
+        self.psi_F=cos(atan(self.dy_F/self.dx_F))*sqrt(self.dy_F^2+self.dx_F^2)
+        self.psi_B=cos(atan(self.dy_B/self.dx_B))*sqrt(self.dy_B^2+self.dx_B^2)
+        self.psi_bx=cos(atan(self.dy_b/self.dx_b))*sqrt(self.dy_b^2+self.dx_b^2)
+        self.psi_by=cos(atan(self.dx_b/self.dy_b))*sqrt(self.dy_b^2+self.dx_b^2)
 
     def ROS_sensors(self):
         '''get sensor measurements from ROS'''
