@@ -2,21 +2,14 @@ from __future__ import division
 import numpy as np
 import control
 import rospy
+from estimator import UKF
 
 # A should ba 12x12
 # B should be a 12x8
 # C should be a 9x12 (12x12 with DVL)
 # D should be a 9x8 (12x8 with DVL)
 
-class Controller(object):
-    def __init__(self):
-        self.load_config()
-
-    def load_config(self):
-        '''Loads config file with all necessary values
-        found in simulation'''
-        pass
-
+class Controller(UKF):
     def ROS_estimate(self):
         '''retrieves state estimate from UKF through
         ROS'''
