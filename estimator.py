@@ -96,6 +96,8 @@ class UKF(object):
         self.dy_BL=T_BLy-y_m
         self.dz_BL=T_BLz-z_m
 
+        # mass of sub (kg)
+        self.m=cfg['m']
         # gravity (m/s^2)
         self.g=cfg['g']
         # density of water (kg/m^3)
