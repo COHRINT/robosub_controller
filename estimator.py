@@ -3,6 +3,8 @@ import numpy as np
 from scipy import integrate
 import rospy
 from math import *
+import os
+import yaml
 
 class UKF(object):
     def __init__(self):
@@ -12,7 +14,7 @@ class UKF(object):
 
     def load_config(self,path=None):
         if not path:
-            path=os.path.dirname(__file__) + 'config.yaml'
+            path=os.path.dirname(__file__) + '/config.yaml'
         try:
             with open(path, 'r') as stream:
                 cfg=yaml.load(stream)
@@ -24,6 +26,8 @@ class UKF(object):
     def extract_vars(self):
         '''creates all variables used in the controller and estimator'''
         # center of mass
+        cfg = self.cfg; 
+
         x_m=cfg['x_m']
         y_m=cfg['y_m']
         z_m=cfg['z_m']
@@ -98,9 +102,9 @@ class UKF(object):
 
         # mass of sub (kg)
         self.m=cfg['m']
-        # gravity (m/s^2)
+        # gravity (m/s**2)
         self.g=cfg['g']
-        # density of water (kg/m^3)
+        # density of water (kg/m**3)
         self.rho=cfg['rho']
         # buoyancy force
         self.Fb=cfg['Fb']
@@ -185,22 +189,35 @@ class UKF(object):
         Input: constants-constants from modeling/config
         file'''
 
-        self.phi_R=cos(atan(self.dz_FR/self.dy_FR))*sqrt(self.dz_FR^2+self.dy_FR^2)
-        self.phi_L=cos(atan(self.dz_FL/self.dy_FL))*sqrt(self.dz_FL^2+self.dy_FL^2)
-        self.phi_bz=cos(atan(self.dy_b/self.dz_b))*sqrt(self.dz_b^2+self.dy_b^2)
-        self.phi_by=cos(atan(self.dz_b/self.dy_b))*sqrt(self.dz_b^2+self.dy_b^2)
+        self.phi_R=cos(atan(self.dz_FR/self.dy_FR))*sqrt(self.dz_FR**2+self.dy_FR**2)
+        self.phi_L=cos(atan(self.dz_FL/self.dy_FL))*sqrt(self.dz_FL**2+self.dy_FL**2)
+        self.phi_bz=cos(atan(self.dy_b/self.dz_b))*sqrt(self.dz_b**2+self.dy_b**2)
+        self.phi_by=cos(atan(self.dz_b/self.dy_b))*sqrt(self.dz_b**2+self.dy_b**2)
 
-        self.theta_F=cos(atan(self.dz_FR/self.dx_FR))*sqrt(self.dz_FR^2+self.dx_FR^2)
-        self.theta_B=cos(atan(self.dz_BL/self.dx_BL))*sqrt(self.dz_BL^2+self.dx_BL^2)
-        self.theta_bx=cos(atan(self.dz_b/self.dx_b))*sqrt(self.dz_b^2+self.dx_b^2)
-        self.theta_bz=cos(atan(self.dx_b/self.dz_b))*sqrt(self.dz_b^2+self.dx_b^2)
+        self.theta_F=cos(atan(self.dz_FR/self.dx_FR))*sqrt(self.dz_FR**2+self.dx_FR**2)
+        self.theta_B=cos(atan(self.dz_BL/self.dx_BL))*sqrt(self.dz_BL**2+self.dx_BL**2)
+        self.theta_bx=cos(atan(self.dz_b/self.dx_b))*sqrt(self.dz_b**2+self.dx_b**2)
+        self.theta_bz=cos(atan(self.dx_b/self.dz_b))*sqrt(self.dz_b**2+self.dx_b**2)
 
-        self.psi_L=cos(atan(self.dx_L/self.dy_L))*sqrt(self.dy_R^2+self.dx_R^2)
-        self.psi_R=cos(atan(self.dx_R/self.dy_R))*sqrt(self.dy_L^2+self.dx_L^2)
-        self.psi_F=cos(atan(self.dy_F/self.dx_F))*sqrt(self.dy_F^2+self.dx_F^2)
-        self.psi_B=cos(atan(self.dy_B/self.dx_B))*sqrt(self.dy_B^2+self.dx_B^2)
-        self.psi_bx=cos(atan(self.dy_b/self.dx_b))*sqrt(self.dy_b^2+self.dx_b^2)
-        self.psi_by=cos(atan(self.dx_b/self.dy_b))*sqrt(self.dy_b^2+self.dx_b^2)
+        self.psi_L=cos(atan(self.dx_L/self.dy_L))*sqrt(self.dy_R**2+self.dx_R**2)
+        self.psi_R=cos(atan(self.dx_R/self.dy_R))*sqrt(self.dy_L**2+self.dx_L**2)
+        self.psi_F=cos(atan(self.dy_F/self.dx_F))*sqrt(self.dy_F**2+self.dx_F**2)
+        self.psi_B=cos(atan(self.dy_B/self.dx_B))*sqrt(self.dy_B**2+self.dx_B**2)
+        self.psi_bx=cos(atan(self.dy_b/self.dx_b))*sqrt(self.dy_b**2+self.dx_b**2)
+        self.psi_by=cos(atan(self.dx_b/self.dy_b))*sqrt(self.dy_b**2+self.dx_b**2)
+
+    def make_nonLinearFunctions(self):
+        '''create lambda functions for non-linear state equations'''
+        #Drag Forces
+        self.F_D_x = lambda x : (self.rho/2)*(self.Cd_x*abs(cos(x[10])*cos(x[8]))*self.A_x + self.Cd_y*abs(sin(x[10]))*self.A_y + self.Cd_z*abs(sin(x[10]))*self.A_z)*(x[1]**2); 
+        self.F_D_y = lambda x : (self.rho/2)*(self.Cd_x*abs(sin(x[10]))*self.A_x + self.Cd_y*abs(cos(x[10])*cos(x[6]))*self.A_y + self.Cd_z*abs(sin(x[6]))*self.A_z)*(x[3]**2); 
+        
+
+        #State Derivatives
+        self.xdotdot = lambda x,u : ((u[0]+u[1])*(cos(x[10]))*(cos(x[8])) + (u[2]+u[3])*(-sin(x[10])) + (u[4]+u[5]+u[6]+u[7])*(sin(x[8])) - self.F_D_x(x))/self.m; 
+        
+
+        
 
     def ROS_sensors(self):
         '''get sensor measurements from ROS'''
@@ -229,5 +246,16 @@ class UKF(object):
         pass
 
 
+def testNonLinear():
+    x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
+    u = [.2,1,0,0,0,0,0,0]; 
+
+    fil = UKF(); 
+    fil.make_nonLinearFunctions(); 
+
+    a = fil.xdotdot(x,u); 
+    print(a); 
+
+
 if __name__ == '__main__':
-    pass
+    testNonLinear(); 
