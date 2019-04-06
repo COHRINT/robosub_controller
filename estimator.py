@@ -211,13 +211,22 @@ class UKF(object):
         #Drag Forces
         self.F_D_x = lambda x : (self.rho/2)*(self.Cd_x*abs(cos(x[10])*cos(x[8]))*self.A_x + self.Cd_y*abs(sin(x[10]))*self.A_y + self.Cd_z*abs(sin(x[10]))*self.A_z)*(x[1]**2); 
         self.F_D_y = lambda x : (self.rho/2)*(self.Cd_x*abs(sin(x[10]))*self.A_x + self.Cd_y*abs(cos(x[10])*cos(x[6]))*self.A_y + self.Cd_z*abs(sin(x[6]))*self.A_z)*(x[3]**2); 
-        
+        self.F_D_z = lambda x : (self.rho/2)*(self.Cd_x*abs(sin(x[8]))*self.A_x + self.Cd_y*abs(sin(x[6]))*A_y + self.Cd_z*abs(cos(x[6])*cos(x[8]))*self.A_z)*(x[5]**2); 
+
+        self.F_D_phi = lambda x : (self.rho/(2*self.Ixx))*(self.Cd_z*self.A_zL*self.dy_zL(x[7]*self.dy_zL + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[6])*cos(x[8])) + \
+
 
         #State Derivatives
         self.xdotdot = lambda x,u : ((u[0]+u[1])*(cos(x[10]))*(cos(x[8])) + (u[2]+u[3])*(-sin(x[10])) + (u[4]+u[5]+u[6]+u[7])*(sin(x[8])) - self.F_D_x(x))/self.m; 
-        
+        self.ydotdot = lambda x,u : ((u[0]+u[1])*(sin(x[10])) + (u[2]+u[3])*(cos(x[10])*cos(x[6])) - (u[4]+u[5]+u[6]+u[7])*sin(x[6]) - self.F_D_y(x))/self.m; 
+        self.zdotdot = lambda x,u : ((u[0]+u[1])*(-sin(x[8])) + (u[2]+u[3])*sin(x[6]) + (u[4]+u[5]+u[6]+u[7])*(cos(x[6])*cos(x[8])) - F_D_z - self.Fb)/self.m; 
 
-        
+        self.phidotdot = lambda x,u : (1/self.Ixx)*((u[5]+u[7])*self.phi_R - (u[4]+u[6])*self.phi_L) - self.F_D_phi(x) + (self.Fb/self.Ixx)*(self.phi_bz*cos(x[8])*sin(x[6]) - self.phi_bz*(cos(x[8])*cos(x[6]))); 
+        self.thetadotdot = lambda x,u : (1/self.Iyy)*(-(u[7]+u[6])*self.theta_B + (u[4]+u[5])*self.theta_F) - self.F_D_theta(x) + (self.Fb/self.Iyy)*(self.theta_bx*cos(x[8])*cos(x[6]) + self.theta_bz*sin(x[8])); 
+        self.psidotdot = lambda x,u : (1/self.Izz)*(u[0]*self.psi_L - u[1]*self.psi_R + u[2]*self.psi_F + u[3](self.psi_B)) - self.F_D_psi(x) + (self.Fb/self.Izz)*(self.psi_bx*cos(x[8])*cos(x[6]) - self.psi_by*sin(x[8])); 
+
+        self.accels = lambda x,u : [self.xdotdot(x,u),self.ydotdot(x,u),self.zdotdot(x,u),self.phidotdot(x,u),self.thetadotdot(x,u),self.psidotdot(x,u)]; 
+
 
     def ROS_sensors(self):
         '''get sensor measurements from ROS'''
