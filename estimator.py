@@ -5,12 +5,16 @@ import rospy
 from math import *
 import os
 import yaml
+import queue
 
 class UKF(object):
     def __init__(self):
         self.cfg=self.load_config()
         self.extract_vars()
         self.make_constants()
+
+        # measurement queue (last-in first-out (LIFO))
+        self.measurement_queue = queue.LifoQueue(maxsize=100)
 
     def load_config(self,path=None):
         if not path:
@@ -228,9 +232,6 @@ class UKF(object):
         self.accels = lambda x,u : [self.xdotdot(x,u),self.ydotdot(x,u),self.zdotdot(x,u),self.phidotdot(x,u),self.thetadotdot(x,u),self.psidotdot(x,u)]; 
 
 
-    def ROS_sensors(self):
-        '''get sensor measurements from ROS'''
-        pass
     
     def propagate_pred(self,point):
         '''propagates a single sigma point according to

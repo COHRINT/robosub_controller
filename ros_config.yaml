@@ -1,0 +1,3 @@
+# update rates for controller and esitmator
+estimator_rate: 50 # [Hz]
+controller_rate: 25 # [Hz]
