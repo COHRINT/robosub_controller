@@ -16,7 +16,7 @@ class UKF(object):
 
     def load_config(self,path=None):
         if not path:
-            path=os.path.dirname(__file__) + '/config.yaml'
+            path=os.path.dirname(__file__) + 'config.yaml'
         try:
             with open(path, 'r') as stream:
                 cfg=yaml.load(stream)
@@ -41,34 +41,42 @@ class UKF(object):
         T_Lx=cfg['T_L']['x']
         T_Ly=cfg['T_L']['y']
         #  T_Lz=cfg['T_L']['z']
+        T_Lf=cfg['T_L']['f']
 
         T_Rx=cfg['T_R']['x']
         T_Ry=cfg['T_R']['y']
         #  T_Rz=cfg['T_R']['z']
+        T_Rf=cfg['T_R']['f']
 
         T_Fx=cfg['T_F']['x']
         T_Fy=cfg['T_F']['y']
         #  T_Fz=cfg['T_F']['z']
+        T_Ff=cfg['T_F']['f']
         
         T_Bx=cfg['T_B']['x']
         T_By=cfg['T_B']['y']
         #  T_Bz=cfg['T_B']['z']
+        T_Bf=cfg['T_B']['f']
 
         T_FRx=cfg['T_FR']['x']
         T_FRy=cfg['T_FR']['y']
         T_FRz=cfg['T_FR']['z']
+        T_FRf=cfg['T_FR']['f']
 
         T_FLx=cfg['T_FL']['x']
         T_FLy=cfg['T_FL']['y']
         T_FLz=cfg['T_FL']['z']
+        T_FLf=cfg['T_FL']['f']
 
         T_BRx=cfg['T_BR']['x']
         T_BRy=cfg['T_BR']['y']
         T_BRz=cfg['T_BR']['z']
+        T_BRf=cfg['T_BR']['f']
 
         T_BLx=cfg['T_BL']['x']
         T_BLy=cfg['T_BL']['y']
         T_BLz=cfg['T_BL']['z']
+        T_BLf=cfg['T_BL']['f']
 
         self.dx_b=x_b-x_m
         self.dy_b=y_b-y_m
@@ -101,6 +109,9 @@ class UKF(object):
         self.dx_BL=T_BLx-x_m
         self.dy_BL=T_BLy-y_m
         self.dz_BL=T_BLz-z_m
+
+        # input vector multiplier
+        self.u_scale=np.array([T_Lf,T_Rf,T_Ff,T_Bf,T_FLf,T_FRf,T_BLf,T_BRf])
 
         # mass of sub (kg)
         self.m=cfg['m']
@@ -244,7 +255,7 @@ class UKF(object):
         #State Derivatives
         self.xdotdot = lambda x,u : ((u[0]+u[1])*(cos(x[10]))*(cos(x[8])) + (u[2]+u[3])*(-sin(x[10])) + (u[4]+u[5]+u[6]+u[7])*(sin(x[8])) - self.F_D_x(x))/self.m; 
         self.ydotdot = lambda x,u : ((u[0]+u[1])*(sin(x[10])) + (u[2]+u[3])*(cos(x[10])*cos(x[6])) - (u[4]+u[5]+u[6]+u[7])*sin(x[6]) - self.F_D_y(x))/self.m; 
-        self.zdotdot = lambda x,u : ((u[0]+u[1])*(-sin(x[8])) + (u[2]+u[3])*sin(x[6]) + (u[4]+u[5]+u[6]+u[7])*(cos(x[6])*cos(x[8])) - self.F_D_z(x) - self.Fb)/self.m; 
+        self.zdotdot = lambda x,u : ((u[0]+u[1])*(-sin(x[8])) + (u[2]+u[3])*sin(x[6]) + (u[4]+u[5]+u[6]+u[7])*(cos(x[6])*cos(x[8])) - self.F_D_z(x) - self.Fb)/self.m + self.g; 
 
         self.phidotdot = lambda x,u : (1/self.Ixx)*((u[5]+u[7])*self.phi_R - (u[4]+u[6])*self.phi_L) - self.F_D_phi(x) \
         + (self.Fb/self.Ixx)*(self.phi_bz*cos(x[8])*sin(x[6]) - self.phi_by*(cos(x[8])*cos(x[6]))); 
@@ -258,7 +269,8 @@ class UKF(object):
 
 
         #Convenience Collector
-        self.accels = lambda x,u : [self.xdotdot(x,u),self.ydotdot(x,u),self.zdotdot(x,u),self.phidotdot(x,u),self.thetadotdot(x,u),self.psidotdot(x,u)]; 
+        self.accels = lambda x,u : [self.xdotdot(x,u),self.ydotdot(x,u),self.zdotdot(x,u),
+                self.phidotdot(x,u),self.thetadotdot(x,u),self.psidotdot(x,u)]; 
 
 
     def ROS_sensors(self):
@@ -297,7 +309,7 @@ def nonLinearUnitTests():
     #Stationary
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
     u = [0,0,0,0,0,0,0,0]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Zero Input:               {}".format(a)); 
 
@@ -305,28 +317,28 @@ def nonLinearUnitTests():
     #Forward
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
     u = [1,1,0,0,0,0,0,0]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Forward Thrusters:        {}".format(a)); 
 
     #Strafe
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
     u = [0,0,1,1,0,0,0,0]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Strafe Right Thrusters:   {}".format(a));
 
     #Down
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
     u = [0,0,0,0,.25,.25,.25,.25]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Down Thrusters:           {}".format(a));
 
     #Down and Forward
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
     u = [1,1,0,0,.25,.25,.25,.25]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Depth Forward Thrusters:  {}".format(a));
 
@@ -334,7 +346,7 @@ def nonLinearUnitTests():
     #Barrel-Roll
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
     u = [1,1,0,0,0,.5,0,.5]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Barrel Roll Thrusters:    {}".format(a));
 
@@ -345,7 +357,7 @@ def nonLinearUnitTests():
     x = [0,-0.1,0,0,0,0,0,0,0,0,0,0]; 
     u = [0,0,0,0,.25,.25,.25,.25]; 
     #u = [0,0,0,0,0,0,0,0]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Depth Forward:      {}".format(a)); 
 
@@ -362,7 +374,7 @@ def nonLinearUnitTests():
     x = [0,0,0,0.1,0,0,0,0,0,0,0,0]; 
     u = [0,0,0,0,.25,.25,.25,.25]; 
     #u = [0,0,0,0,0,0,0,0]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Depth Strafe:       {}".format(a)); 
 
@@ -374,7 +386,7 @@ def nonLinearUnitTests():
     #Roll
     x = [0,0,0,0,0,0,0,0.1,0,0,0,0]; 
     u = [0,0,0,0,.25,.25,.25,.25]; 
-    a = fil.accels(x,u); 
+    a = fil.accels(x,np.array(u)*fil.u_scale); 
     a = ['%.2f' % b for b in a]
     print("Depth Roll:         {}".format(a)); 
 
