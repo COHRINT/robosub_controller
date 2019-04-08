@@ -5,6 +5,7 @@ import rospy
 from math import *
 import os
 import yaml
+import numpy as np
 
 class UKF(object):
     def __init__(self):
@@ -218,27 +219,27 @@ class UKF(object):
         
 
         #Drag Forces
-        self.F_D_x = lambda x : (self.rho/2)*(self.Cd_x*abs(cos(x[10])*cos(x[8]))*self.A_x + self.Cd_y*abs(sin(x[10]))*self.A_y + self.Cd_z*abs(sin(x[10]))*self.A_z)*(x[1]**2); 
-        self.F_D_y = lambda x : (self.rho/2)*(self.Cd_x*abs(sin(x[10]))*self.A_x + self.Cd_y*abs(cos(x[10])*cos(x[6]))*self.A_y + self.Cd_z*abs(sin(x[6]))*self.A_z)*(x[3]**2); 
-        self.F_D_z = lambda x : (self.rho/2)*(self.Cd_x*abs(sin(x[8]))*self.A_x + self.Cd_y*abs(sin(x[6]))*self.A_y + self.Cd_z*abs(cos(x[6])*cos(x[8]))*self.A_z)*(x[5]**2); 
+        self.F_D_x = lambda x :  np.sign(x[1])*(self.rho/2)*(self.Cd_x*abs(cos(x[10])*cos(x[8]))*self.A_x + self.Cd_y*abs(sin(x[10]))*self.A_y + self.Cd_z*abs(sin(x[10]))*self.A_z)*(x[1]**2); 
+        self.F_D_y = lambda x : np.sign(x[3])*(self.rho/2)*(self.Cd_x*abs(sin(x[10]))*self.A_x + self.Cd_y*abs(cos(x[10])*cos(x[6]))*self.A_y + self.Cd_z*abs(sin(x[6]))*self.A_z)*(x[3]**2); 
+        self.F_D_z = lambda x : np.sign(x[5])*(self.rho/2)*(self.Cd_x*abs(sin(x[8]))*self.A_x + self.Cd_y*abs(sin(x[6]))*self.A_y + self.Cd_z*abs(cos(x[6])*cos(x[8]))*self.A_z)*(x[5]**2); 
 
         self.F_D_phi = lambda x : (self.rho/(2*self.Ixx))*( \
-            self.Cd_zL*self.A_zL*self.dy_zL*(x[7]*self.dy_zL + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[6])*cos(x[8])))**2 + \
-            self.Cd_zR*self.A_zR*self.dy_zR*(x[7]*self.dy_zR + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[8])*cos(x[6])))**2 + \
-            self.Cd_yB*self.A_yB*self.dz_yB*(x[7]*self.dz_yB + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6])))**2 + \
-            self.Cd_yT*self.A_yT*self.dz_yT*(x[7]*self.dz_yT + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6]))))**2
+            self.Cd_zL*self.A_zL*self.dy_zL*(x[7]*self.dy_zL + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[6])*cos(x[8]))) + \
+            self.Cd_zR*self.A_zR*self.dy_zR*(x[7]*self.dy_zR + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[8])*cos(x[6]))) + \
+            self.Cd_yB*self.A_yB*self.dz_yB*(x[7]*self.dz_yB + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6]))) + \
+            self.Cd_yT*self.A_yT*self.dz_yT*(x[7]*self.dz_yT + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6]))))
         
         self.F_D_theta = lambda x : (self.rho/(2*self.Iyy))*( \
-            self.Cd_xB*self.A_xB*self.dz_xB*(x[9]*self.dz_xB + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8])))**2 + \
-            self.Cd_xT*self.A_xT*self.dz_xT*(x[9]*self.dz_xT + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8])))**2 + \
-            self.Cd_zF*self.A_zF*self.dx_zF*(x[9]*self.dx_zF + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[6])*cos(x[8])))**2 + \
-            self.Cd_zB*self.A_zB*self.dx_zB*(x[9]*self.dx_zB + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[6])*cos(x[8])))**2)
+            self.Cd_xB*self.A_xB*self.dz_xB*(x[9]*self.dz_xB + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8]))) + \
+            self.Cd_xT*self.A_xT*self.dz_xT*(x[9]*self.dz_xT + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8]))) + \
+            self.Cd_zF*self.A_zF*self.dx_zF*(x[9]*self.dx_zF + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[6])*cos(x[8]))) + \
+            self.Cd_zB*self.A_zB*self.dx_zB*(x[9]*self.dx_zB + x[1]*abs(sin(x[8])) + x[3]*abs(sin(x[6])) + x[5]*abs(cos(x[6])*cos(x[8]))))
 
         self.F_D_psi = lambda x : (self.rho/(2*self.Izz))*( \
-            self.Cd_xR*self.A_xR*self.dy_xR*(x[11]*self.dy_xR + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8])))**2 + \
-            self.Cd_xL*self.A_xL*self.dy_xL*(x[11]*self.dy_xL + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8])))**2 + \
-            self.Cd_yF*self.A_yF*self.dx_yF*(x[11]*self.dx_yF + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6])))**2 + \
-            self.Cd_yBa*self.A_yBa*self.dx_yBa*(x[11]*self.dx_yBa + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6])))**2)
+            self.Cd_xR*self.A_xR*self.dy_xR*(x[11]*self.dy_xR + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8]))) + \
+            self.Cd_xL*self.A_xL*self.dy_xL*(x[11]*self.dy_xL + x[1]*abs(cos(x[10])*cos(x[8])) + x[3]*abs(sin(x[10])) + x[5]*abs(sin(x[8]))) + \
+            self.Cd_yF*self.A_yF*self.dx_yF*(x[11]*self.dx_yF + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6]))) + \
+            self.Cd_yBa*self.A_yBa*self.dx_yBa*(x[11]*self.dx_yBa + x[1]*abs(sin(x[10])) + x[3]*abs(cos(x[10])*cos(x[6])) + x[5]*abs(sin(x[6]))))
 
         #State Derivatives
         self.xdotdot = lambda x,u : ((u[0]+u[1])*(cos(x[10]))*(cos(x[8])) + (u[2]+u[3])*(-sin(x[10])) + (u[4]+u[5]+u[6]+u[7])*(sin(x[8])) - self.F_D_x(x))/self.m; 
@@ -246,13 +247,14 @@ class UKF(object):
         self.zdotdot = lambda x,u : ((u[0]+u[1])*(-sin(x[8])) + (u[2]+u[3])*sin(x[6]) + (u[4]+u[5]+u[6]+u[7])*(cos(x[6])*cos(x[8])) - self.F_D_z(x) - self.Fb)/self.m; 
 
         self.phidotdot = lambda x,u : (1/self.Ixx)*((u[5]+u[7])*self.phi_R - (u[4]+u[6])*self.phi_L) - self.F_D_phi(x) \
-        + (self.Fb/self.Ixx)*(self.phi_bz*cos(x[8])*sin(x[6]) - self.phi_bz*(cos(x[8])*cos(x[6]))); 
+        + (self.Fb/self.Ixx)*(self.phi_bz*cos(x[8])*sin(x[6]) - self.phi_by*(cos(x[8])*cos(x[6]))); 
         
         self.thetadotdot = lambda x,u : (1/self.Iyy)*(-(u[7]+u[6])*self.theta_B + (u[4]+u[5])*self.theta_F) - self.F_D_theta(x) \
         + (self.Fb/self.Iyy)*(self.theta_bx*cos(x[8])*cos(x[6]) + self.theta_bz*sin(x[8])); 
         
-        self.psidotdot = lambda x,u : (1/self.Izz)*(u[0]*self.psi_L - u[1]*self.psi_R + u[2]*self.psi_F + u[3]*self.psi_B) - self.F_D_psi(x) \
-        + (self.Fb/self.Izz)*(self.psi_bx*cos(x[8])*cos(x[6]) - self.psi_by*sin(x[8])); 
+        self.psidotdot = lambda x,u : (1/self.Izz)*(u[0]*self.psi_L - u[1]*self.psi_R + u[2]*self.psi_F - u[3]*self.psi_B) - self.F_D_psi(x) \
+        + (self.Fb/self.Izz)*(self.psi_bx*cos(x[8])*sin(x[6]) - self.psi_by*sin(x[8])); 
+
 
 
         #Convenience Collector
@@ -290,7 +292,7 @@ def nonLinearUnitTests():
 
     fil = UKF();
     
-    print("Zero State Thruster Input")
+    print("Zero State, Thruster Input")
 
     #Stationary
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
@@ -331,10 +333,52 @@ def nonLinearUnitTests():
 
     #Barrel-Roll
     x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
-    u = [1,1,0,0,-.125,.5,-.125,.5]; 
+    u = [1,1,0,0,0,.5,0,.5]; 
     a = fil.accels(x,u); 
     a = ['%.2f' % b for b in a]
     print("Barrel Roll Thrusters:    {}".format(a));
+
+    print(""); 
+
+    print("Movement States, Depth Thruster Inputs")
+    #Forward
+    x = [0,-0.1,0,0,0,0,0,0,0,0,0,0]; 
+    u = [0,0,0,0,.25,.25,.25,.25]; 
+    #u = [0,0,0,0,0,0,0,0]; 
+    a = fil.accels(x,u); 
+    a = ['%.2f' % b for b in a]
+    print("Depth Forward:      {}".format(a)); 
+
+    print("X Drag: {}".format(fil.F_D_x(x))); 
+    print("Y Drag: {}".format(fil.F_D_y(x))); 
+    print("Z Drag: {}".format(fil.F_D_z(x))); 
+
+    print("Roll Drag: {}".format(fil.F_D_phi(x))); 
+    print("Pitch Drag: {}".format(fil.F_D_theta(x))); 
+    print("Yaw Drag: {}".format(fil.F_D_psi(x))); 
+
+
+    #Strafe
+    x = [0,0,0,0.1,0,0,0,0,0,0,0,0]; 
+    u = [0,0,0,0,.25,.25,.25,.25]; 
+    #u = [0,0,0,0,0,0,0,0]; 
+    a = fil.accels(x,u); 
+    a = ['%.2f' % b for b in a]
+    print("Depth Strafe:       {}".format(a)); 
+
+    # print("Roll Drag: {}".format(fil.F_D_phi(x))); 
+    # print("Pitch Drag: {}".format(fil.F_D_theta(x))); 
+    # print("Yaw Drag: {}".format(fil.F_D_psi(x))); 
+
+
+    #Roll
+    x = [0,0,0,0,0,0,0,0.1,0,0,0,0]; 
+    u = [0,0,0,0,.25,.25,.25,.25]; 
+    a = fil.accels(x,u); 
+    a = ['%.2f' % b for b in a]
+    print("Depth Roll:         {}".format(a)); 
+
+
 
 if __name__ == '__main__':
     nonLinearUnitTests(); 

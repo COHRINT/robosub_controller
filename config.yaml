@@ -1,13 +1,13 @@
 # mass of sub (kg)
-m: 1.0
+m: 10.0
 # center of mass
 x_m: 0.0
 y_m: 0.0
 z_m: 0.0
 # center of buoyancy
-x_b: 0.001
-y_b: 0.001
-z_b: 0.001
+x_b: 0.000001
+y_b: 0.000001
+z_b: 0.000001
 # gravity (m/s^2)
 g: 9.81
 # density of water (kg/m^3)
@@ -58,27 +58,27 @@ Cd_z: 0.2
 
 # top, bottom, left, right
 # intersection of y along x axis
-Cd_xT: 0.0
-Cd_xB: 0.0
+Cd_xT: 0.2
+Cd_xB: 0.2
 # intersection of z along x axis
-Cd_xR: 0.0
-Cd_xL: 0.0
+Cd_xR: 0.2
+Cd_xL: 0.2
 
 # top, bottom, front, back
 # intersectoin of x along y axis
-Cd_yT: 0.0
-Cd_yB: 0.0
+Cd_yT: 0.2
+Cd_yB: 0.2
 # intersectoin of z along y axis
-Cd_yF: 0.0
-Cd_yBa: 0.0
+Cd_yF: 0.2
+Cd_yBa: 0.2
 
 # left, righ, front, back
 # intersectoin of x along z axis
-Cd_zL: 0.0
-Cd_zR: 0.0
+Cd_zL: 0.2
+Cd_zR: 0.2
 # intersectoin of y along z axis
-Cd_zF: 0.0
-Cd_zB: 0.0
+Cd_zF: 0.2
+Cd_zB: 0.2
 
 # Surface areas
 A_x: 1.0
@@ -106,17 +106,17 @@ A_zB: 1.0
 # Moment arm lengths
 # how to read:
 # dz_xT = distance along z axis to center of top slice viewed in the x direction
-dz_xT: 0.0
-dz_xB: 0.0
-dy_xR: 0.0
-dy_xL: 0.0
+dz_xT: -1.0
+dz_xB: 1.0
+dy_xR: 1.0
+dy_xL: -1.0
 
-dz_yT: 0.0
-dz_yB: 0.0
-dx_yF: 0.0
-dx_yBa: 0.0
+dz_yT: -1.0
+dz_yB: 1.0
+dx_yF: 1.0
+dx_yBa: -1.0
 
-dy_zL: 0.0
-dy_zR: 0.0
-dx_zF: 0.0
-dx_zB: 0.0
+dy_zL: -1.0
+dy_zR: 1.0
+dx_zF: 1.0
+dx_zB: -1.0
