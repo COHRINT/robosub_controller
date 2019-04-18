@@ -18,6 +18,16 @@ class Controller(UKF):
         Input: x-linearization point
         u-linearization inputs
         dt-discrete interval'''
+        def discritize(A,B,dt):
+            n=A.shape[0]
+            r=B.shape[1]
+            Ahat=np.zeros([n+r,n+r])
+            Ahat[0:n,0:n]=A
+            Ahat[0:n,n:]=B
+            FG0I=scipy.linalg.expm(Ahat*dt)
+            F=FG0I[0:n,0:n]
+            G=FG0I[0:n,n:]
+            return A,B
 
         dxdotdot_dxdot=-(self.A_x*self.Cd_x*self.rho*x[1])/self.m
         dxdotdot_dtheta=-self.g*cos(x[10])*cos(x[8])+((self.Fb*cos(x[10])*cos(x[8]))/self.m)
@@ -144,8 +154,9 @@ class Controller(UKF):
             print "System is not fully observable"
         else:
             print "Sytem is fully observable"
+        A,B=discritize(A,B,dt)
         # TODO: for some reason this reduces A from 12x12 to 10x10
-        return control.ss(A,B,C,D,dt)
+        return control.ss(A,B,C,D)
 
     def LQR(self,state_space):
         def dlqr(A,B,Q,R):
