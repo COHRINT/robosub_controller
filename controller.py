@@ -4,6 +4,7 @@ import control
 import rospy
 from estimator import UKF
 from math import *
+import scipy.linalg
 
 
 class Controller(UKF):
@@ -135,16 +136,74 @@ class Controller(UKF):
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0]])
 
-        controller=control.ss(A,B,C,D,dt)
+        if np.linalg.matrix_rank(control.ctrb(A,B))<12:
+            print "Sytem is not fully controllable"
+        else:
+            print "Sytem is fully controllable"
+        if np.linalg.matrix_rank(control.obsv(A,C))<12:
+            print "System is not fully observable"
+        else:
+            print "Sytem is fully observable"
+        # TODO: for some reason this reduces A from 12x12 to 10x10
+        return control.ss(A,B,C,D,dt)
 
-    def LQR(self):
-        '''computes the gain matrix K to a specified behavior'''
-        pass
+    def LQR(self,state_space):
+        def dlqr(A,B,Q,R):
+            """Solve the discrete time lqr controller.
+            x[k+1] = A x[k] + B u[k]
+            cost = sum x[k].T*Q*x[k] + u[k].T*R*u[k]
+            """
+            #  http://www.mwm.im/lqr-controllers-with-python/
+            #ref Bertsekas, p.151
 
-    def feed_forward(self,A,B,C,K):
+            #first, try to solve the ricatti equation
+            S = np.matrix(scipy.linalg.solve_discrete_are(A, B, Q, R))
+            #compute the LQR gain
+            K = np.matrix(scipy.linalg.inv(B.T*S*B+R)*(B.T*S*A))
+            eigVals, eigVecs = scipy.linalg.eig(A-B*K)
+            return K, S, eigVals
+        #TODO: this can be cleaned up. Easy way to specify different controllers
+        rho=0.05
+        x_max=5
+        x_dot_max=0.1
+        y_max=5
+        y_dot_max=0.1
+        z_max=5
+        z_dot_max=0.1
+        phi_max=5
+        phi_dot_max=0.1
+        theta_max=5
+        theta_dot_max=0.1
+        psi_max=5
+        psi_dot_max=0.1
+        Q=np.array([1/x_max**2,1/x_dot_max**2,1/y_max**2,1/y_dot_max**2,
+            1/z_max**2,1/z_dot_max**2,1/phi_max**2,1/phi_dot_max**2,
+            1/theta_max**2,1/theta_dot_max**2,1/psi_max**2,1/psi_dot_max**2,])*np.eye(12)
+        R=rho*np.eye(8)
+        #TODO: This needs to be removed, A matrix should be 12x12
+        Q=Q[0:10,0:10]
+        #  print state_space.A.shape
+        #  print Q.shape
+        K,S,E=dlqr(state_space.A,state_space.B,Q,R)
+        print K
+        return K
+
+    def feed_forward(self,state_space,K):
         '''creates the feed forward matrix F to compute
         control inputs using a desired state'''
-        pass
+        Gcl=-state_space.C*np.linalg.inv(state_space.A-state_space.B*K)*state_space.B
+        # this is done because the size of the matrix must map our measurements to our inputs 
+        F=np.linalg.lstsq(Gcl,np.eye(9))
+        if np.linalg.matrix_rank(control.ctrb(state_space.A-state_space.B*K,state_space.B*F))<12:
+            print "Sytem is not fully controllable"
+        else:
+            print "Sytem is fully controllable"
+        if np.linalg.matrix_rank(control.obsv(state_space.A-state_space.B*K,state_space.C-state_space.D*K))<12:
+            print "System is not fully observable"
+        else:
+            print "Sytem is fully observable"
+
+        return F
 
     def sub_planner(self, points):
         '''given a set of points to hit on a trajectory,
@@ -158,7 +217,8 @@ class Controller(UKF):
         x-current state
         x_desired-desired state
         type-which controller to use'''
-        pass
+        #TODO: use stored F and K matricies for a specific controller
+        u=-K*x+F*x_desired
     
     def test_controller(self):
         '''tests such as saturation and simulated responses'''
@@ -169,4 +229,6 @@ if __name__ == '__main__':
     x=[0,0,0,0,0,0,0,0,0,0,0,0]
     u=[0,0,0,0,0,0,0,0]
     dt=1/25
-    a.linearize_matricies(x,u,dt)
+    state_space=a.linearize_matricies(x,u,dt)
+    K=a.LQR(state_space)
+    F=a.feed_forward(state_space,K)
