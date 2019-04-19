@@ -5,6 +5,31 @@ import rospy
 from estimator import UKF
 from math import *
 import scipy.linalg
+import sys
+
+class StateSpace():
+    def __init__(self,A,B,C,D,dt):
+        n=A.shape[0]
+        r=B.shape[1]
+        Ahat=np.zeros([n+r,n+r])
+        Ahat[0:n,0:n]=A
+        Ahat[0:n,n:]=B
+        FG0I=scipy.linalg.expm(Ahat*dt)
+        F=FG0I[0:n,0:n]
+        G=FG0I[0:n,n:]
+        self.A=F
+        self.B=G
+        self.C=C
+        self.D=D
+
+    def __str__(self):
+        """String representation of the state space."""
+            
+        str = "A = " + self.A.__str__() + "\n\n"
+        str += "B = " + self.B.__str__() + "\n\n"
+        str += "C = " + self.C.__str__() + "\n\n"
+        str += "D = " + self.D.__str__() + "\n"
+        return str
 
 
 class Controller(UKF):
@@ -18,16 +43,6 @@ class Controller(UKF):
         Input: x-linearization point
         u-linearization inputs
         dt-discrete interval'''
-        def discritize(A,B,dt):
-            n=A.shape[0]
-            r=B.shape[1]
-            Ahat=np.zeros([n+r,n+r])
-            Ahat[0:n,0:n]=A
-            Ahat[0:n,n:]=B
-            FG0I=scipy.linalg.expm(Ahat*dt)
-            F=FG0I[0:n,0:n]
-            G=FG0I[0:n,n:]
-            return A,B
 
         dxdotdot_dxdot=-(self.A_x*self.Cd_x*self.rho*x[1])/self.m
         dxdotdot_dtheta=-self.g*cos(x[10])*cos(x[8])+((self.Fb*cos(x[10])*cos(x[8]))/self.m)
@@ -146,17 +161,17 @@ class Controller(UKF):
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0]])
 
-        if np.linalg.matrix_rank(control.ctrb(A,B))<12:
-            print "Sytem is not fully controllable"
+        if np.linalg.matrix_rank(control.ctrb(A,B))<A.shape[0]:
+            print "System is not fully controllable"
         else:
-            print "Sytem is fully controllable"
-        if np.linalg.matrix_rank(control.obsv(A,C))<12:
+            print "System is fully controllable"
+        #  print np.sum(control.obsv(A,C),axis=1)
+        if np.linalg.matrix_rank(control.obsv(A,C))<A.shape[0]:
             print "System is not fully observable"
         else:
-            print "Sytem is fully observable"
-        A,B=discritize(A,B,dt)
-        # TODO: for some reason this reduces A from 12x12 to 10x10
-        return control.ss(A,B,C,D)
+            print "System is fully observable"
+        state_space=StateSpace(A,B,C,D,dt)
+        return state_space
 
     def LQR(self,state_space):
         def dlqr(A,B,Q,R):
@@ -191,28 +206,27 @@ class Controller(UKF):
             1/z_max**2,1/z_dot_max**2,1/phi_max**2,1/phi_dot_max**2,
             1/theta_max**2,1/theta_dot_max**2,1/psi_max**2,1/psi_dot_max**2,])*np.eye(12)
         R=rho*np.eye(8)
-        #TODO: This needs to be removed, A matrix should be 12x12
-        Q=Q[0:10,0:10]
-        #  print state_space.A.shape
-        #  print Q.shape
         K,S,E=dlqr(state_space.A,state_space.B,Q,R)
-        print K
+        #  print K
         return K
 
     def feed_forward(self,state_space,K):
         '''creates the feed forward matrix F to compute
         control inputs using a desired state'''
-        Gcl=-state_space.C*np.linalg.inv(state_space.A-state_space.B*K)*state_space.B
-        # this is done because the size of the matrix must map our measurements to our inputs 
-        F=np.linalg.lstsq(Gcl,np.eye(9))
-        if np.linalg.matrix_rank(control.ctrb(state_space.A-state_space.B*K,state_space.B*F))<12:
-            print "Sytem is not fully controllable"
+        A=state_space.A
+        B=state_space.B
+        C=state_space.C
+        D=state_space.D
+        F=np.linalg.pinv(-C*np.linalg.inv(A-B*K)*B)
+
+        if np.linalg.matrix_rank(control.ctrb(A-B*K,B*F))<A.shape[0]:
+            print "System is not fully controllable"
         else:
-            print "Sytem is fully controllable"
-        if np.linalg.matrix_rank(control.obsv(state_space.A-state_space.B*K,state_space.C-state_space.D*K))<12:
+            print "System is fully controllable"
+        if np.linalg.matrix_rank(control.obsv(A-B*K,C-D*K))<A.shape[0]:
             print "System is not fully observable"
         else:
-            print "Sytem is fully observable"
+            print "System is fully observable"
 
         return F
 
