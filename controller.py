@@ -33,11 +33,55 @@ class StateSpace():
 
 
 class Controller(UKF):
+    def __init__(self,files_to_load=[]):
+        UKF.__init__(self)
+
+        if 'position_hold' in files_to_load:
+            controller_hold=np.load('position_hold.npy').item()
+            self.K_hold=controller_hold['K']
+            self.F_hold=controller_hold['F']
+        if 'moving' in files_to_load:
+            controller_move=np.load('moving.npy').item()
+            self.K_move=controller_move['K']
+            self.F_move=controller_move['F']
+
     def ROS_estimate(self):
         '''retrieves state estimate from UKF through
         ROS'''
         pass
 
+    def create_controller(self,lin_x,lin_u,dt,Q_max,R_max,name):
+        '''creates and saves the K and F matricies for a controller
+        Inputs: lin_x=linearization point states [x,xdot,y,ydot,z,zdot,phi,phidot,theta,thetadot,psi,psidot]
+                lin_u=linearization point inputs [L,R,F,B,FL,FR,BL,BR]
+                dt=time step size
+                Q_max=max distance away from state allowed [1x12]
+                R_max=max input allowed (scalar or [1x8[]])
+                name=name of the controller (string)
+        '''
+        state_space=self.linearize_matricies(lin_x,lin_u,dt)
+
+        A=state_space.A
+        B=state_space.B
+        C=state_space.C
+        D=state_space.D
+
+        Q=(1/Q_max**2)*np.eye(12)
+        R=(1/R_max**2)*np.eye(8)
+        # get K matrix
+        K,S,vals=self.LQR(A,B,Q,R)
+        # get feed forward matrix
+        F=self.feed_forward(A,B,C,D,K)
+
+        save_controller={}
+        save_controller['A']=A
+        save_controller['B']=B
+        save_controller['C']=C
+        save_controller['D']=D
+        save_controller['K']=K
+        save_controller['F']=F
+        np.save(name+'.npy',save_controller)
+        
     def linearize_matricies(self,x,u,dt):
         '''creates discritized linearized F,G,H&M matricies
         Input: x-linearization point
@@ -173,50 +217,25 @@ class Controller(UKF):
         state_space=StateSpace(A,B,C,D,dt)
         return state_space
 
-    def LQR(self,state_space):
-        def dlqr(A,B,Q,R):
-            """Solve the discrete time lqr controller.
-            x[k+1] = A x[k] + B u[k]
-            cost = sum x[k].T*Q*x[k] + u[k].T*R*u[k]
-            """
-            #  http://www.mwm.im/lqr-controllers-with-python/
-            #ref Bertsekas, p.151
+    def LQR(self,A,B,Q,R):
+        """Solve the discrete time lqr controller.
+        x[k+1] = A x[k] + B u[k]
+        cost = sum x[k].T*Q*x[k] + u[k].T*R*u[k]
+        """
+        #  http://www.mwm.im/lqr-controllers-with-python/
+        #ref Bertsekas, p.151
 
-            #first, try to solve the ricatti equation
-            S = np.matrix(scipy.linalg.solve_discrete_are(A, B, Q, R))
-            #compute the LQR gain
-            K = np.matrix(scipy.linalg.inv(B.T*S*B+R)*(B.T*S*A))
-            eigVals, eigVecs = scipy.linalg.eig(A-B*K)
-            return K, S, eigVals
-        #TODO: this can be cleaned up. Easy way to specify different controllers
-        rho=0.05
-        x_max=5
-        x_dot_max=0.1
-        y_max=5
-        y_dot_max=0.1
-        z_max=5
-        z_dot_max=0.1
-        phi_max=5
-        phi_dot_max=0.1
-        theta_max=5
-        theta_dot_max=0.1
-        psi_max=5
-        psi_dot_max=0.1
-        Q=np.array([1/x_max**2,1/x_dot_max**2,1/y_max**2,1/y_dot_max**2,
-            1/z_max**2,1/z_dot_max**2,1/phi_max**2,1/phi_dot_max**2,
-            1/theta_max**2,1/theta_dot_max**2,1/psi_max**2,1/psi_dot_max**2,])*np.eye(12)
-        R=rho*np.eye(8)
-        K,S,E=dlqr(state_space.A,state_space.B,Q,R)
-        #  print K
-        return K
+        #first, try to solve the ricatti equation
+        S = np.matrix(scipy.linalg.solve_discrete_are(A, B, Q, R))
+        #compute the LQR gain
+        K = np.matrix(scipy.linalg.inv(B.T*S*B+R)*(B.T*S*A))
+        eigVals, eigVecs = scipy.linalg.eig(A-B*K)
+        return K, S, eigVals
 
-    def feed_forward(self,state_space,K):
+    def feed_forward(self,A,B,C,D,K):
         '''creates the feed forward matrix F to compute
         control inputs using a desired state'''
-        A=state_space.A
-        B=state_space.B
-        C=state_space.C
-        D=state_space.D
+
         F=np.linalg.pinv(-C*np.linalg.inv(A-B*K)*B)
 
         if np.linalg.matrix_rank(control.ctrb(A-B*K,B*F))<A.shape[0]:
@@ -236,13 +255,12 @@ class Controller(UKF):
         to the controller'''
         pass
 
-    def control_output(self,x,x_desired,type='moving'):
+    def control_output(self,x,x_desired,type='position_hold'):
         '''uses a previously computed gain K to 
         create a control input for the motors
         x-current state
         x_desired-desired state
         type-which controller to use'''
-        #TODO: use stored F and K matricies for a specific controller
         u=-K*x+F*x_desired
     
     def test_controller(self):
@@ -250,10 +268,29 @@ class Controller(UKF):
         pass
 
 if __name__ == '__main__':
-    a=Controller()
-    x=[0,0,0,0,0,0,0,0,0,0,0,0]
-    u=[0,0,0,0,0,0,0,0]
+    sub_control=Controller()
     dt=1/25
-    state_space=a.linearize_matricies(x,u,dt)
-    K=a.LQR(state_space)
-    F=a.feed_forward(state_space,K)
+    #position hold controller
+
+    #linearization point
+    lin_x=[0,0,0,0,0,0,0,0,0,0,0,0]
+    lin_u=[0,0,0,0,0,0,0,0]
+    #max R
+    R_max=0.75
+    #max Q
+    x_max=5
+    x_dot_max=0.1
+    y_max=5
+    y_dot_max=0.1
+    z_max=5
+    z_dot_max=0.1
+    phi_max=5
+    phi_dot_max=0.1
+    theta_max=5
+    theta_dot_max=0.1
+    psi_max=5
+    psi_dot_max=0.1
+    Q_max=np.array([x_max,x_dot_max,y_max,y_dot_max,z_max,z_dot_max,
+        phi_max,phi_dot_max,theta_max,theta_dot_max,psi_max,psi_dot_max])
+
+    sub_control.create_controller(lin_x,lin_u,dt,Q_max,R_max,'position_hold')
