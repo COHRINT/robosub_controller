@@ -1,0 +1,10 @@
+# Simulated IMU config file
+
+type: 'imu'
+update_rate: 100 # [Hz]
+accel_noise: [[1,0,0],
+              [0,1,0],
+              [0,0,1]]
+gyro_noise: [[1,0,0],
+              [0,1,0],
+              [0,0,1]]

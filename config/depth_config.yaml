@@ -1,0 +1,5 @@
+# Simulated depth sensor config file
+
+type: 'depth'
+update_rate: 50 # [Hz]
+depth_noise: 1
