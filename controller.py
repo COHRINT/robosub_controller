@@ -46,19 +46,22 @@ class Controller(UKF):
             self.F_move=controller_move['F']
 
     def ROS_estimate(self):
-        '''retrieves state estimate from UKF through
-        ROS'''
+        """retrieves state estimate from UKF through
+        ROS
+        """
         pass
 
     def create_controller(self,lin_x,lin_u,dt,Q_max,R_max,name):
-        '''creates and saves the K and F matricies for a controller
-        Inputs: lin_x=linearization point states [x,xdot,y,ydot,z,zdot,phi,phidot,theta,thetadot,psi,psidot]
-                lin_u=linearization point inputs [L,R,F,B,FL,FR,BL,BR]
-                dt=time step size
-                Q_max=max distance away from state allowed [1x12]
-                R_max=max input allowed (scalar or [1x8[]])
-                name=name of the controller (string)
-        '''
+        """Creates and saves the K and F matricies for a controller
+
+        Inputs: 
+            lin_x (array) [x,xdot,y,ydot,z,zdot,phi,phidot,theta,thetadot,psi,psidot]: linearization point-states 
+            lin_u (array) [L,R,F,B,FL,FR,BL,BR]: linearization point-inputs 
+            dt (float): time step size
+            Q_max (array [1x12]): max distance away from state allowed
+            R_max (float or array [1x8]): max input allowed
+            name (str): name of the controller
+        """
         state_space=self.linearize_matricies(lin_x,lin_u,dt)
 
         A=state_space.A
@@ -83,10 +86,13 @@ class Controller(UKF):
         np.save(name+'.npy',save_controller)
         
     def linearize_matricies(self,x,u,dt):
-        '''creates discritized linearized F,G,H&M matricies
-        Input: x-linearization point
-        u-linearization inputs
-        dt-discrete interval'''
+        """creates discritized linearized F,G,H & M matricies
+
+        Inputs:
+            x (array_like): linearization point-states
+            u (array_like): linearization point-inputs
+            dt (float): discrete interval
+        """
 
         dxdotdot_dxdot=-(self.A_x*self.Cd_x*self.rho*x[1])/self.m
         dxdotdot_dtheta=-self.g*cos(x[10])*cos(x[8])+((self.Fb*cos(x[10])*cos(x[8]))/self.m)
@@ -233,8 +239,8 @@ class Controller(UKF):
         return K, S, eigVals
 
     def feed_forward(self,A,B,C,D,K):
-        '''creates the feed forward matrix F to compute
-        control inputs using a desired state'''
+        """creates the feed forward matrix F to compute
+        control inputs using a desired state"""
 
         F=np.linalg.pinv(-C*np.linalg.inv(A-B*K)*B)
 
@@ -250,21 +256,28 @@ class Controller(UKF):
         return F
 
     def sub_planner(self, points):
-        '''given a set of points to hit on a trajectory,
+        """given a set of points to hit on a trajectory,
         determine the desired state w/velocity to send
-        to the controller'''
+        to the controller"""
         pass
 
     def control_output(self,x,x_desired,type='position_hold'):
-        '''uses a previously computed gain K to 
+        """uses a previously computed gain K and F to 
         create a control input for the motors
-        x-current state
-        x_desired-desired state
-        type-which controller to use'''
-        u=-K*x+F*x_desired
+        Inputs:
+            x (array [1x12]): current state
+            x_desired (array [1x12]): desired state
+            type (str): which controller to use
+        """
+        if type=='position_hold':
+            u=-self.K_hold*x+self.F_hold*x_desired
+        elif type=='moving':
+            u=-self.K_move*x+self.F_move*x_desired
+
+        return u
     
     def test_controller(self):
-        '''tests such as saturation and simulated responses'''
+        """tests such as saturation and simulated responses"""
         pass
 
 if __name__ == '__main__':
