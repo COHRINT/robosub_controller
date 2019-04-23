@@ -17,7 +17,7 @@ class UKF(object):
 
     def load_config(self,path=None):
         if not path:
-            path=os.path.dirname(__file__) + '/config.yaml'
+            path=os.path.dirname(__file__) + '/../config.yaml'
         try:
             with open(path, 'r') as stream:
                 cfg=yaml.load(stream)
@@ -295,6 +295,7 @@ class UKF(object):
         measurement step'''
         pass
 
+
     def state_update(self):
         '''calculate kalman gain and perform final
         state estimate update for the non-linear dynamics'''
@@ -314,28 +315,78 @@ class UKF(object):
         else:
             P = sigma; 
 
+        #augment mean and covariance
+
+
+
         #set constants
-        n = 12; 
+        n = 2; 
         alpha = 1e-3; 
         beta = 2; 
         kappa = 0; 
         lamb = alpha**2*(n+kappa) - n; 
 
+        #get points
         points = []; 
         points.append(x); 
         
+
+
         modSig = sqrtm((n+lamb)*P); 
         for i in range(0,n):
             points.append(x + modSig[:,i])
         for i in range(n,2*n):
-            
+            points.append(x + modSig[:,i-n]); 
 
 
+        #set weights
+        weights_m = []; 
+        weights_c = []; 
+
+        weights_m.append(lamb/(n+lamb)); 
+        weights_c.append((lamb/(n+lamb)) + (1-alpha**2 + beta)); 
+
+        for i in range(0,2*n):
+            weights_m.append(1/(2*(n+lamb))); 
+            weights_c.append(1/(2*(n+lamb))); 
 
 
+        chi = []; 
+        for i in range(0,len(points)):
+            chi.append(self.propagate_pred(points[i]));  
 
-        
+        mean_prop,sig_prop = self.prediction(chi); 
 
+
+        #reaugment matrices
+
+        #get new points
+        pointsBar = []; 
+        pointsBar.append(mean_prop); 
+
+        modSigBar = sqrtm((n+lamb)*sig_prop); 
+        for i in range(0,n):
+            pointsBar.append(mean_prop + modSigBar[:,i])
+        for i in range(n,2*n):
+            pointsBar.append(mean_prop + modSigBar[:,i-n]); 
+
+
+        #project through meas
+        gamma = []; 
+        for i in range(0,len(pointsBar)):
+            gamma.append(propagate_meas(pointsBar[i])); 
+
+        #recombine points
+        zhat = []
+
+        #comput kalman gain
+        K = Px*Pz^-1; 
+
+        #get updated state estimate and covariance
+        x = x+K*(z-zhat); 
+        P = P-K*Pz*K.T; 
+
+        return x,P; 
 
 
 def nonLinearUnitTests():
