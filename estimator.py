@@ -1,6 +1,7 @@
 from __future__ import division
 import numpy as np
 from scipy import integrate
+from scipy.linalg import sqrtm
 import rospy
 from math import *
 import os
@@ -16,7 +17,7 @@ class UKF(object):
 
     def load_config(self,path=None):
         if not path:
-            path=os.path.dirname(__file__) + 'config.yaml'
+            path=os.path.dirname(__file__) + '/config.yaml'
         try:
             with open(path, 'r') as stream:
                 cfg=yaml.load(stream)
@@ -300,6 +301,43 @@ class UKF(object):
         pass
 
 
+    def update(self,mean,sigma,measurement):
+
+        #Confirm inputs in numpy formats
+        if(not isinstance(mean,np.ndarray)):
+            x = np.array(mean); 
+        else:
+            x = mean; 
+
+        if(not isinstance(sigma,np.matrix)):
+            P = np.matrix(sigma); 
+        else:
+            P = sigma; 
+
+        #set constants
+        n = 12; 
+        alpha = 1e-3; 
+        beta = 2; 
+        kappa = 0; 
+        lamb = alpha**2*(n+kappa) - n; 
+
+        points = []; 
+        points.append(x); 
+        
+        modSig = sqrtm((n+lamb)*P); 
+        for i in range(0,n):
+            points.append(x + modSig[:,i])
+        for i in range(n,2*n):
+            
+
+
+
+
+
+        
+
+
+
 def nonLinearUnitTests():
 
     fil = UKF();
@@ -391,6 +429,11 @@ def nonLinearUnitTests():
     print("Depth Roll:         {}".format(a)); 
 
 
+def ukfTest():
+
+    fil = UKF(); 
+    fil.update([1,2],[[1,.5],[.5,2]],[4,2]); 
 
 if __name__ == '__main__':
-    nonLinearUnitTests(); 
+    #nonLinearUnitTests(); 
+    ukfTest(); 
