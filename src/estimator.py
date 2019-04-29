@@ -7,6 +7,10 @@ from math import *
 import os
 import yaml
 import numpy as np
+import matplotlib.pyplot as plt
+from copy import deepcopy
+import time;
+
 
 class UKF(object):
     def __init__(self):
@@ -14,6 +18,8 @@ class UKF(object):
         self.extract_vars()
         self.make_constants()
         self.make_nonLinearFunctions(); 
+
+        self.dt = 1/25
 
     def load_config(self,path=None):
         if not path:
@@ -227,6 +233,7 @@ class UKF(object):
         #TODO#
         #Check if the xB and yB here are correct, bottom or back
         #Something might be wrong with the psi equation, yaw momement generated when strafing
+        #looks like some anomalies result from displacement of bouancy from gravity
         ####################################################################
         
 
@@ -272,6 +279,31 @@ class UKF(object):
         #Convenience Collector
         self.accels = lambda x,u : [self.xdotdot(x,u),self.ydotdot(x,u),self.zdotdot(x,u),
                 self.phidotdot(x,u),self.thetadotdot(x,u),self.psidotdot(x,u)]; 
+
+        
+        
+
+    def kinematics(self,x,u):
+        a = self.accels(x,u); 
+        t = self.dt
+        k = [0 for i in range(0,len(x))]; 
+        for i in range(0,len(a)):
+            k[i*2] = (x[i*2] + x[i*2+1]*t + .5*a[i]*t**2); 
+            k[i*2+1] = (x[i*2+1] + a[i]*t**2); 
+
+        return k; 
+
+
+    def measurement(self,x,u):
+
+        y = [0 for i in range(0,10)]; 
+        a = self.accels(x,u);
+
+        y[0:3] = a[0:3]; 
+        y[3:8] = x[6:11]; 
+        y[9] = x[2];  
+
+        return y; 
 
 
     def ROS_sensors(self):
@@ -485,6 +517,53 @@ def ukfTest():
     fil = UKF(); 
     fil.update([1,2],[[1,.5],[.5,2]],[4,2]); 
 
+
+def kinematicTest():
+    fil = UKF(); 
+    x = [0,0,0,0,0,0,0,0,0,0,0,0]; 
+    u = [1,1,0,0,-1.2816,-1.2816,-1.2816,-1.2816]; 
+    #a = fil.accels(x,np.array(u)*fil.u_scale); 
+    #a = ['%.2f' % b for b in a]
+    #print(a);
+    #xnew = integrate.quad()
+
+
+    # xnew = fil.kinematics(x,np.array(u)*fil.u_scale);
+    # print(x); 
+    # xnew = ['%.8f' % b for b in xnew]
+    # print(xnew); 
+
+    runs = 10000; 
+    #res = np.zeros(shape=(runs,12));  
+
+    start = time.clock(); 
+    for i in range(0,runs):
+        #a = fil.accels(x,np.array(u)*fil.u_scale); 
+        #a = fil.accels(x,np.array(u)*fil.u_scale); 
+        #print('Accels:' + str(['%.2E' % b for b in a])); 
+        x = fil.kinematics(x,np.array(u)*fil.u_scale);
+        # y = fil.measurement(x,np.array(u)*fil.u_scale); 
+        # print('Meas:  ' + str(['%.2E' % b for b in y])); 
+        # print('State: ' + str(['%.2E' % b for b in x])); 
+        #print(['%.2f' % b for b in x]); 
+        #res[i,:] = x; 
+
+        # plt.plot(res[0],color='blue',label='X Distance'); 
+        # plt.plot(res[1],color='green', label='X Velocity'); 
+        # plt.axhline(a[0], color='red', label = 'X Accel'); 
+        # plt.ylim([0,1.6])
+        # plt.legend(); 
+        # plt.pause(0.01); 
+        # plt.cla(); 
+        # plt.clf(); 
+    delTime = time.clock()-start; 
+    print("Loop time for {} runs: {:0.2f} seconds".format(runs,delTime)); 
+    print("Time per loop: {:0.5f} seconds".format(delTime/runs))
+
+
+
+
 if __name__ == '__main__':
     #nonLinearUnitTests(); 
-    ukfTest(); 
+    #ukfTest();
+    kinematicTest();  
