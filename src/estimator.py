@@ -2,7 +2,8 @@ from __future__ import division
 import numpy as np
 from scipy import integrate
 from scipy.linalg import sqrtm
-import rospy
+from scipy.linalg import det
+#import rospy
 from math import *
 import os
 import yaml
@@ -18,6 +19,7 @@ class UKF(object):
         self.extract_vars()
         self.make_constants()
         self.make_nonLinearFunctions(); 
+        self.makeNoise(); 
 
         self.dt = 1/25
 
@@ -280,8 +282,11 @@ class UKF(object):
         self.accels = lambda x,u : [self.xdotdot(x,u),self.ydotdot(x,u),self.zdotdot(x,u),
                 self.phidotdot(x,u),self.thetadotdot(x,u),self.psidotdot(x,u)]; 
 
-        
-        
+    def makeNoise(self):
+        #Define assumed Process and Measurement Noise Matrices    
+        #NOTE: These are fake...
+        self.R = np.identity(12)*.1;  
+        self.Q = np.identity(10)*.1; 
 
     def kinematics(self,x,u):
         a = self.accels(x,u); 
@@ -334,11 +339,16 @@ class UKF(object):
         pass
 
 
-    def update(self,mean,sigma,measurement):
+    def update(self,mean,sigma,u,z):
+
+        #Using the Thrun Page 70 algorithm
+        #Note for when you debug this: The fact that means come in as row vectors 
+        #is forcing the covariances to be non positive definite somehow
+
 
         #Confirm inputs in numpy formats
-        if(not isinstance(mean,np.ndarray)):
-            x = np.array(mean); 
+        if(not isinstance(mean,np.matrix)):
+            x = np.matrix(mean).T; 
         else:
             x = mean; 
 
@@ -347,29 +357,31 @@ class UKF(object):
         else:
             P = sigma; 
 
-        #augment mean and covariance
 
+        #Augment Matrices
+        #xa = x.append()
 
 
         #set constants
-        n = 2; 
-        alpha = 1e-3; 
+        n = 12; 
+        alpha = 1e-3;
         beta = 2; 
         kappa = 0; 
-        lamb = alpha**2*(n+kappa) - n; 
+        lamb = (alpha**2)*(n+kappa) - n; 
 
         #get points
         points = []; 
-        points.append(x); 
+        points.append(x.T); 
         
-
 
         modSig = sqrtm((n+lamb)*P); 
         for i in range(0,n):
-            points.append(x + modSig[:,i])
+            points.append(x.T + modSig[:,i]);
         for i in range(n,2*n):
-            points.append(x + modSig[:,i-n]); 
+            points.append(x.T - modSig[:,i-n]); 
 
+        for i in range(0,len(points)):
+            points[i] = points[i].T; 
 
         #set weights
         weights_m = []; 
@@ -383,43 +395,257 @@ class UKF(object):
             weights_c.append(1/(2*(n+lamb))); 
 
 
+        #print(weights_m);
+
+        #print(weights_m)
+
+        #print(sum(weights_m));
+        #print(sum(weights_c));
+
+        #mean_prop,sig_prop = self.prediction(chi); 
         chi = []; 
         for i in range(0,len(points)):
-            chi.append(self.propagate_pred(points[i]));  
+            chi.append(np.matrix(self.kinematics(points[i].T.tolist()[0],u)).T);  
 
-        mean_prop,sig_prop = self.prediction(chi); 
+        #print(len(chi))
+        #print(sum(weights_m))
 
 
-        #reaugment matrices
+        #print(chi[1],weights_m[1]); 
+        #print(chi[13],weights_m[13]); 
+
+
+
+        #print(weights_m[0]*chi[0])
+
+
+        mean_prop = np.matrix(np.zeros(shape=(len(x)))).T; 
+        for i in range(0,len(chi)):
+            #print(chi[i])
+            mean_prop += weights_m[i]*chi[i]; 
+            #print(sum(mean_prop))
+        
+        #print(mean_prop);
+
+        #print(np.sum(chi)); 
+
+        #print(mean_prop)
+
+
+        sig_prop = np.zeros(shape=(len(x),len(x))); 
+        for i in range(0,len(chi)):
+            sig_prop += weights_c[i]*(chi[i]-mean_prop)*((chi[i]-mean_prop).T) + self.R; 
+
+        
 
         #get new points
         pointsBar = []; 
-        pointsBar.append(mean_prop); 
+        pointsBar.append(mean_prop.T); 
 
         modSigBar = sqrtm((n+lamb)*sig_prop); 
-        for i in range(0,n):
-            pointsBar.append(mean_prop + modSigBar[:,i])
-        for i in range(n,2*n):
-            pointsBar.append(mean_prop + modSigBar[:,i-n]); 
 
+
+        for i in range(0,n):
+            pointsBar.append(mean_prop.T + modSigBar[:,i])
+        for i in range(n,2*n):
+            pointsBar.append(mean_prop.T + modSigBar[:,i-n]); 
+
+        for i in range(0,len(pointsBar)):
+            pointsBar[i] = pointsBar[i].T; 
+
+
+        #print(pointsBar[1])
 
         #project through meas
         gamma = []; 
         for i in range(0,len(pointsBar)):
-            gamma.append(propagate_meas(pointsBar[i])); 
+            gamma.append(np.matrix(self.measurement(pointsBar[i].T.tolist()[0],u)).T); 
+
+
 
         #recombine points
-        zhat = []
+        zhat = np.matrix(np.zeros(shape=(len(gamma[0])))).T; 
+        for i in range(0,len(gamma)): 
+            #print(weights_m[i])
+            zhat += weights_m[i]*gamma[i];
 
+
+        Pz = np.matrix(np.zeros(shape=(len(gamma[0]),len(gamma[0])))); 
+        for i in range(0,len(gamma)):
+            Pz += weights_c[i]*(gamma[i]-zhat)*((gamma[i]-zhat).T) + self.Q; 
+
+
+        Px = np.matrix(np.zeros(shape=(len(x),len(gamma[0])))); 
+        for i in range(0,len(gamma)):
+            #print(chi[i].shape); 
+            #print(gamma[i].shape)
+            #print(chi[i]-mean_prop)
+            Px += weights_c[i]*(chi[i]-mean_prop)*(gamma[i]-zhat).T; 
+
+        #Px = Px.T; 
         #comput kalman gain
-        K = Px*Pz^-1; 
+        K = Px*(Pz.I); 
+
+        #print((K*np.matrix(z-zhat).T).shape)
+
 
         #get updated state estimate and covariance
-        x = x+K*(z-zhat); 
-        P = P-K*Pz*K.T; 
+        #x = mean_prop+(K*np.matrix(z-zhat).T).T; 
+        newX = mean_prop + (K*(np.matrix(z).T-zhat)); 
+        
 
-        return x,P; 
+        newP = sig_prop-K*Pz*K.T; 
 
+        #print(det(P));
+
+        #print(x)
+        #print(x.tolist()[0])
+        return newX,newP; 
+
+
+class EKF(UKF):
+
+    def __init__(self):
+        print("Warning: EKF Not Relinearizing, do not use")
+        UKF.__init__(self)
+        self.controller = np.load('position_hold.npy').item(); 
+        #print(self.controller.item().keys());
+        self.G = np.matrix(self.controller['A']); 
+        self.H = np.matrix(self.controller['C']); 
+
+    def relinearize(self,x,u):
+
+        dt = 1/25; 
+
+        dxdotdot_dxdot=-(self.A_x*self.Cd_x*self.rho*x[1])/self.m
+        dxdotdot_dtheta=-self.g*cos(x[10])*cos(x[8])+((self.Fb*cos(x[10])*cos(x[8]))/self.m)
+        dxdotdot_dpsi=self.g*sin(x[10])*sin(x[8])-((self.Fb*sin(x[10])*sin(x[8]))/self.m)
+        dxdotdot_dTL=1/self.m
+        dxdotdot_dTR=1/self.m
+
+        dydotdot_dydot=-(self.A_y*self.Cd_y*self.rho*x[3])/self.m
+        dydotdot_dphi=self.g*cos(x[6])*cos(x[10])-((self.Fb*cos(x[10])*cos(x[6]))/self.m)
+        dydotdot_dpsi=-self.g*sin(x[6])*sin(x[10])+((self.Fb*sin(x[10])*sin(x[6]))/self.m)
+        dydotdot_dTF=1/self.m
+        dydotdot_dTB=1/self.m
+
+        dzdotdot_dzdot=-(self.A_z*self.Cd_z*self.rho*x[5])/self.m
+        dzdotdot_dphi=-self.g*cos(x[8])*sin(x[6])+((self.Fb*cos(x[8])*sin(x[6]))/self.m)
+        dzdotdot_dtheta=-self.g*cos(x[6])*sin(x[8])+((self.Fb*cos(x[6])*sin(x[8]))/self.m)
+        dzdotdot_dTFL=1/self.m
+        dzdotdot_dTFR=1/self.m
+        dzdotdot_dTBL=1/self.m
+        dzdotdot_dTBR=1/self.m
+
+        dphidotdot_dydot=-.5*self.Ixx*self.rho*(2*self.A_yB*self.Cd_yB*self.dz_yB* \
+                (self.dz_yB*x[7]+x[3])+2*self.A_yT*self.Cd_yT*self.dz_yT*(self.dz_yT*x[7]+x[3]))
+        dphidotdot_dzdot=-.5*self.Ixx*self.rho*(2*self.A_zL*self.Cd_zL*self.dy_zL* \
+                (self.dy_zL*x[7]+x[5])+2*self.A_zR*self.Cd_zR*self.dy_zR*(self.dy_zR*x[7]+x[5]))
+        dphidotdot_dphi=(self.Fb/self.Ixx)*(self.phi_bz*cos(x[6])*cos(x[8])+self.phi_by*cos(x[8])*sin(x[6]))
+        dphidotdot_dphidot=-.5*self.Ixx*self.rho*(2*self.A_yB*self.Cd_yB*self.dz_yB**2* \
+                (self.dz_yB*x[7]+x[3])+2*self.A_yT*self.Cd_yT*self.dz_yT**2*(self.dz_yT*x[7]+x[3])+ \
+                2*self.A_zL*self.Cd_zL*self.dy_zL**2*(self.dy_zL*x[7]+x[5])+2*self.A_zR*self.Cd_zR* \
+                self.dy_zR**2*(self.dy_zR*x[7]+x[5]))
+        dphidotdot_dtheta=(self.Fb/self.Ixx)*(self.phi_by*cos(x[6])*sin(x[8])-self.phi_bz*sin(x[6])*sin(x[8]))
+        dphidotdot_dTFL=-self.phi_L/self.Ixx
+        dphidotdot_dTFR=self.phi_R/self.Ixx
+        dphidotdot_dTBL=-self.phi_L/self.Ixx
+        dphidotdot_dTBR=self.phi_R/self.Ixx
+
+        dthetadotdot_dxdot=-.5*self.Iyy*self.rho*(2*self.A_xB*self.Cd_xB*self.dz_xB* \
+                (self.dz_xB*x[9]+x[1])+2*self.A_xT*self.Cd_xT*self.dz_xT*(self.dz_xT*x[9]+x[1]))
+        dthetadotdot_dzdot=-.5*self.Iyy*self.rho*(2*self.A_zB*self.Cd_zB*self.dx_zB* \
+                (self.dx_zB*x[9]+x[5])+2*self.A_zF*self.Cd_zF*self.dx_zF*(self.dx_zF*x[9]+x[5]))
+        dthetadotdot_dphi=(-self.Fb/self.Iyy)*(self.theta_bx*cos(x[8])*sin(x[6]))
+        dthetadotdot_dtheta=(self.Fb/self.Iyy)*(self.theta_bz*cos(x[8])-self.theta_bx*cos(x[6])*sin(x[8]))
+        dthetadotdot_dthetadot=-.5*self.Iyy*self.rho*(2*self.A_xB*self.Cd_xB*self.dz_xB**2* \
+                (self.dz_xB*x[9]+x[1])+2*self.A_xT*self.Cd_xT*self.dz_xT**2*(self.dz_xT*x[9]+x[1])+ \
+                2*self.A_zB*self.Cd_zB*self.dx_zB**2*(self.dx_zB*x[9]+x[5])+2*self.A_zF*self.Cd_zF* \
+                self.dx_zF**2*(self.dx_zF*x[9]+x[5]))
+        dthetadotdot_dTFL=self.theta_F/self.Iyy
+        dthetadotdot_dTFR=self.theta_F/self.Iyy
+        dthetadotdot_dTBL=-self.theta_B/self.Iyy
+        dthetadotdot_dTBR=-self.theta_B/self.Iyy
+        
+        dpsidotdot_dxdot=-.5*self.Izz*self.rho*(2*self.A_xL*self.Cd_xL*self.dy_xL* \
+                (self.dy_xL*x[11]+x[1])+2*self.A_xR*self.Cd_xR*self.dy_xR*(self.dy_xR*x[11]+x[1]))
+        dpsidotdot_dydot=-.5*self.Izz*self.rho*(2*self.A_yBa*self.Cd_yBa*self.dx_yBa* \
+                (self.dx_yBa*x[11]+x[3])+2*self.A_yF*self.Cd_yF*self.dx_yF*(self.dx_yF*x[11]+x[3]))
+        dpsidotdot_dphi=(self.Fb/self.Izz)*(self.psi_bx*cos(x[8])*sin(x[6]))
+        dpsidotdot_dtheta=(self.Fb/self.Izz)*(-self.psi_by*cos(x[8])-self.psi_bx*sin(x[6])*sin(x[8]))
+        dpsidotdot_dpsidot=-.5*self.Izz*self.rho*(2*self.A_xL*self.Cd_xL*self.dy_xL**2* \
+                (self.dy_xL*x[11]+x[1])+2*self.A_xR*self.Cd_xR*self.dy_xR**2*(self.dy_xR*x[11]+x[1])+ \
+                2*self.A_yBa*self.Cd_yBa*self.dx_yBa**2*(self.dx_yBa*x[11]+x[3])+2*self.A_yF*self.Cd_yF* \
+                self.dx_yF**2*(self.dx_yF*x[11]+x[3]))
+        dpsidotdot_dTL=self.psi_L/self.Izz
+        dpsidotdot_dTR=-self.psi_R/self.Izz
+        dpsidotdot_dTF=self.psi_F/self.Izz
+        dpsidotdot_dTB=-self.psi_B/self.Izz
+
+        # A should be a 12x12
+        # B should be a 12x8
+        # C should be a 10x12 (12x12 with DVL)
+        # D should be a 10x8 (12x8 with DVL)
+        A=np.array([[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, dxdotdot_dxdot, 0, 0, 0, 0, 0, 0, dxdotdot_dtheta, 0, dxdotdot_dpsi, 0],
+            [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, dydotdot_dydot, 0, 0, dydotdot_dphi, 0, 0, 0, dydotdot_dpsi, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, dzdotdot_dzdot, dzdotdot_dphi, 0, dzdotdot_dtheta, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+            [0, 0, 0, dphidotdot_dydot, 0, dphidotdot_dzdot, dphidotdot_dphi, dphidotdot_dphidot, dphidotdot_dtheta, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+            [0, dthetadotdot_dxdot, 0, 0, 0, dthetadotdot_dzdot, dthetadotdot_dphi, 0, dthetadotdot_dtheta, dthetadotdot_dthetadot, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [0, dpsidotdot_dxdot, 0, dpsidotdot_dydot, 0, 0, dpsidotdot_dphi, 0, dpsidotdot_dtheta, 0, dxdotdot_dpsi, dpsidotdot_dpsidot]])
+
+
+        C=np.array([[0, dxdotdot_dxdot, 0, 0, 0, 0, 0, 0, dxdotdot_dtheta, 0, dxdotdot_dpsi, 0],
+            [0, 0, 0, dydotdot_dydot, 0, 0, dydotdot_dphi, 0, 0, 0, dydotdot_dpsi, 0],
+            [0, 0, 0, 0, 0, dzdotdot_dzdot, dzdotdot_dphi, 0, dzdotdot_dtheta, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]])
+
+        self.G = np.matrix(A); 
+        self.H = np.matrix(C); 
+
+
+
+
+    
+    def ekfUpdate(self,mean,sigma,u,z):
+        
+        #relinearize
+        self.relinearize(mean,u); 
+
+
+        z = np.matrix(z).T;
+
+        muBar = self.kinematics(mean,u); 
+
+        mean = np.matrix(mean).T; 
+        sigma = np.matrix(sigma);
+
+        muBar = np.matrix(muBar).T; 
+
+        sigBar = self.G*sigma*self.G.T + self.R; 
+        K = sigBar*self.H.T*((self.H*sigBar*self.H.T + self.Q).I); 
+        muNew = muBar + K*(z-np.matrix(self.measurement(muBar,u)).T); 
+        sigNew = (np.identity(12)-K*self.H)*sigBar; 
+
+        a = muNew.T.tolist()[0]; 
+        
+        for i in range(0,len(a)):
+            muNew[i] = a[i].tolist()[0]; 
+        #print(np.array(muNew).T.tolist()[0]); 
+        muNew = np.array(muNew).T.tolist()[0]
+
+        return muNew,sigNew; 
 
 def nonLinearUnitTests():
 
@@ -515,8 +741,17 @@ def nonLinearUnitTests():
 def ukfTest():
 
     fil = UKF(); 
-    fil.update([1,2],[[1,.5],[.5,2]],[4,2]); 
+    mean = [0,0,0,0,0,0,0,0,0,0,0,0]; 
+    u = [1,1,0,0,0,0,0,0]
+    u = np.array(u)*fil.u_scale
+    nextX = fil.kinematics(mean,u); 
+    sigma = np.identity(len(mean))*10;
+    meas = fil.measurement(nextX,u);
+    #print(len(meas));  
 
+    m,P = fil.update(mean,sigma,u,meas); 
+
+    print(m);  
 
 def kinematicTest():
     fil = UKF(); 
@@ -533,7 +768,7 @@ def kinematicTest():
     # xnew = ['%.8f' % b for b in xnew]
     # print(xnew); 
 
-    runs = 10000; 
+    runs = 1; 
     #res = np.zeros(shape=(runs,12));  
 
     start = time.clock(); 
@@ -544,7 +779,7 @@ def kinematicTest():
         x = fil.kinematics(x,np.array(u)*fil.u_scale);
         # y = fil.measurement(x,np.array(u)*fil.u_scale); 
         # print('Meas:  ' + str(['%.2E' % b for b in y])); 
-        # print('State: ' + str(['%.2E' % b for b in x])); 
+        print('State: ' + str(['%.5f' % b for b in x])); 
         #print(['%.2f' % b for b in x]); 
         #res[i,:] = x; 
 
@@ -562,8 +797,105 @@ def kinematicTest():
 
 
 
+def ekfTest():
+    fil = EKF(); 
+    mean = [0,0,0,0,0,0,0,0,0,0,0,0]; 
+    u = [1,1,0,0,0,0,0,0]
+    u = np.array(u)*fil.u_scale
+    nextX = fil.kinematics(mean,u); 
+    sigma = np.identity(len(mean))*0.0001;
+    meas = fil.measurement(nextX,u);
+    #print(len(meas));  
+
+    m,P = fil.ekfUpdate(mean,sigma,u,meas); 
+
+    #print(m)
+
+def allFilterTest():
+    filU = UKF(); 
+    filE = EKF(); 
+
+    mean = [0,0,0,0,0,0,0,0,0,0,0,0]; 
+    u = [1000,1000,0,0,10000,0,0,0]
+    #u = [0,0,0,0,0,0,0,0]; 
+    sigma = np.matrix(np.identity(len(mean))*1);
+
+
+    truePos = []; 
+    truePos.append(mean); 
+
+
+
+    uPos = []; 
+    uSig = []; 
+    ePos = []; 
+    eSig = []; 
+    uPos.append(mean); 
+    ePos.append(mean); 
+    uSig.append(sigma); 
+    eSig.append(sigma); 
+
+    for i in range(0,1000):
+        print("Step: {}".format(i)); 
+        nextX = filU.kinematics(truePos[-1],u); 
+        meas = filU.measurement(nextX,u); 
+
+        #umean,usig = filU.update(uPos[-1],uSig[-1],u,meas); 
+        emean,esig = filE.ekfUpdate(ePos[-1],eSig[-1],u,meas); 
+
+
+        truePos.append(nextX)
+        #uPos.append(umean); 
+        #uSig.append(usig); 
+        ePos.append(emean); 
+        eSig.append(esig); 
+
+    fig,axarr = plt.subplots(6,2,sharex=True); 
+
+    #print(truePos)
+    for stateMonitor in range(0,6):
+        for der in range(0,2):
+            #stateMonitor = 4; 
+            #uz = [a[stateMonitor*2+der] for a in uPos]; 
+
+            tz = [a[stateMonitor*2+der] for a in truePos]; 
+            ez = [a[stateMonitor*2+der] for a in ePos]; 
+
+            error = [ez[i]-tz[i] for i in range(0,len(ez))]; 
+
+            #print(eSig[0]); 
+            es = [a.tolist()[stateMonitor*2+der][stateMonitor*2+der] for a in eSig]; 
+            upperEs = [ez[i]+2*np.sqrt(es[i]) for i in range(0,len(ez))]; 
+            lowerEs = [ez[i]-2*np.sqrt(es[i]) for i in range(0,len(ez))]; 
+
+            # us = [a.tolist()[stateMonitor*2+der][stateMonitor*2+der] for a in uSig]; 
+            # upperUs = [uz[i]+2*np.sqrt(us[i]) for i in range(0,len(uz))]; 
+            # lowerUs = [uz[i]-2*np.sqrt(us[i]) for i in range(0,len(uz))]; 
+
+
+            #print(es);
+
+            x = [i for i in range(0,len(tz))]; 
+
+            #axarr[stateMonitor][der].plot(x,tz,c='k',linestyle='-',linewidth=5,label='Truth Z'); 
+            # axarr[stateMonitor][der].plot(x,uz,c='r',linestyle='-',linewidth=3,label='UKF Z'); 
+            # axarr[stateMonitor][der].plot(x,upperUs,c='r',linestyle='--',linewidth=1); 
+            # axarr[stateMonitor][der].plot(x,lowerUs,c='r',linestyle='--',linewidth=1); 
+            #axarr[stateMonitor][der].fill_between(x,upperUs,lowerUs,alpha=0.25); 
+
+            axarr[stateMonitor][der].plot(x,ez,c='b',linestyle='--',linewidth=3,label='EKF Z'); 
+            axarr[stateMonitor][der].plot(x,upperEs,c='b',linestyle='--',linewidth=1); 
+            axarr[stateMonitor][der].plot(x,lowerEs,c='b',linestyle='--',linewidth=1); 
+            axarr[stateMonitor][der].fill_between(x,upperEs,lowerEs,alpha=0.25); 
+
+            #plt.legend(); 
+            #plt.show(); 
+    plt.show();
 
 if __name__ == '__main__':
     #nonLinearUnitTests(); 
     #ukfTest();
-    kinematicTest();  
+    #kinematicTest();  
+    #ekfTest(); 
+    
+    allFilterTest(); 
