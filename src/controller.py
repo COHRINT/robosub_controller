@@ -7,6 +7,8 @@ from math import *
 import scipy.linalg
 import sys
 
+np.set_printoptions(precision=4,suppress=True)
+
 class StateSpace():
     def __init__(self,A,B,C,D,dt):
         n=A.shape[0]
@@ -255,13 +257,25 @@ class Controller(UKF):
 
         return F
 
+    def planner_lookup(self,x):
+        pass
+
     def sub_planner(self, points):
         """given a set of points to hit on a trajectory,
         determine the desired state w/velocity to send
         to the controller"""
-        pass
+        for point in points:
+            point=np.array(point)
+            #  print np.max(np.abs(self.x_est-point))
+            while np.max(np.abs(self.x_est-point))>0.5:
+                u=self.control_output(self.x_est,point)
+                #  self.x_est=np.array(self.kinematics(self.x_est,u))
+                self.x_est=np.array(self.kinematics(self.x_est,u*self.u_scale))
+                #  print self.x_est[0],self.x_est[2],self.x_est[4]
+                #  print self.Fb,self.m*self.g
+                #  sys.exit()
 
-    def control_output(self,x,x_desired,type='position_hold'):
+    def control_output(self,x,x_desired,con_type='position_hold'):
         """uses a previously computed gain K and F to 
         create a control input for the motors
         Inputs:
@@ -269,41 +283,49 @@ class Controller(UKF):
             x_desired (array [1x12]): desired state
             type (str): which controller to use
         """
-        if type=='position_hold':
-            u=-self.K_hold*x+self.F_hold*x_desired
-        elif type=='moving':
+        #  r=np.array([0,0,0,x_desired[6],x_desired[7],x_desired[8],x_desired[9],x_desired[10],x_desired[11],x_desired[4]])
+        if con_type=='position_hold':
+            #  print np.dot(-self.K_hold,np.transpose(x))
+            #  print np.dot(self.F_hold,np.transpose(x_desired)).shape
+            u=np.array(np.dot(-self.K_hold,np.transpose(x-x_desired)))#+\
+                    #  np.array(np.dot(self.F_hold,np.transpose(r)))
+        elif con_type=='moving':
             u=-self.K_move*x+self.F_move*x_desired
 
-        return u
+        #  print u[0]
+        return u[0]
     
     def test_controller(self):
         """tests such as saturation and simulated responses"""
         pass
 
 if __name__ == '__main__':
-    sub_control=Controller()
-    dt=1/25
-    #position hold controller
+    sub_control=Controller(['position_hold'])
+    sub_control.x_est=np.array([0,0,0,0,5,0,0,0,0,0,0,0])
+    points=[[0,0,0,0,20,0,0,0,0,0,0,0],[0,0,0,0,5,0,0,0,0,0,0,0]]
+    sub_control.sub_planner(points)
+    #  dt=1/25
+    #  #position hold controller
 
-    #linearization point
-    lin_x=[0,0,0,0,0,0,0,0,0,0,0,0]
-    lin_u=[0,0,0,0,0,0,0,0]
-    #max R
-    R_max=0.75
-    #max Q
-    x_max=5
-    x_dot_max=0.1
-    y_max=5
-    y_dot_max=0.1
-    z_max=5
-    z_dot_max=0.1
-    phi_max=5
-    phi_dot_max=0.1
-    theta_max=5
-    theta_dot_max=0.1
-    psi_max=5
-    psi_dot_max=0.1
-    Q_max=np.array([x_max,x_dot_max,y_max,y_dot_max,z_max,z_dot_max,
-        phi_max,phi_dot_max,theta_max,theta_dot_max,psi_max,psi_dot_max])
+    #  #linearization point
+    #  lin_x=[0,0,0,0,0,0,0,0,0,0,0,0]
+    #  lin_u=[0,0,0,0,0,0,0,0]
+    #  #max R
+    #  R_max=0.75
+    #  #max Q
+    #  x_max=5
+    #  x_dot_max=0.1
+    #  y_max=5
+    #  y_dot_max=0.1
+    #  z_max=0.5
+    #  z_dot_max=1
+    #  phi_max=5
+    #  phi_dot_max=0.1
+    #  theta_max=5
+    #  theta_dot_max=0.1
+    #  psi_max=5
+    #  psi_dot_max=0.1
+    #  Q_max=np.array([x_max,x_dot_max,y_max,y_dot_max,z_max,z_dot_max,
+    #      phi_max,phi_dot_max,theta_max,theta_dot_max,psi_max,psi_dot_max])
 
-    sub_control.create_controller(lin_x,lin_u,dt,Q_max,R_max,'position_hold')
+    #  sub_control.create_controller(lin_x,lin_u,dt,Q_max,R_max,'position_hold')
