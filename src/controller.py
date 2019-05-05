@@ -1,11 +1,15 @@
 from __future__ import division
 import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import control
 import rospy
 from estimator import UKF
 from math import *
 import scipy.linalg
 import sys
+import time
+from hybrid_automaton import Automaton
 
 np.set_printoptions(precision=4,suppress=True)
 
@@ -260,20 +264,31 @@ class Controller(UKF):
     def planner_lookup(self,x):
         pass
 
-    def sub_planner(self, points):
+    def sub_planner(self, point):
         """given a set of points to hit on a trajectory,
         determine the desired state w/velocity to send
         to the controller"""
-        for point in points:
-            point=np.array(point)
-            #  print np.max(np.abs(self.x_est-point))
-            while np.max(np.abs(self.x_est-point))>0.5:
-                u=self.control_output(self.x_est,point)
-                #  self.x_est=np.array(self.kinematics(self.x_est,u))
-                self.x_est=np.array(self.kinematics(self.x_est,u*self.u_scale))
-                #  print self.x_est[0],self.x_est[2],self.x_est[4]
-                #  print self.Fb,self.m*self.g
-                #  sys.exit()
+        #  for point in points:
+        point=np.array(point)
+        #  print np.max(np.abs(self.x_est-point))
+        #  sub=ax.scatter(self.position[-1,0],self.position[-1,1],self.position[-1,2],c='r')
+        count=0
+        while np.max(np.abs(self.x_est-point))>0.5:
+            u=self.control_output(self.x_est,point)
+            #  self.x_est=np.array(self.kinematics(self.x_est,u))
+            self.x_est=np.array(self.kinematics(self.x_est,u*self.u_scale))
+            position=[self.x_est[0],self.x_est[2],self.x_est[4]]
+            if count%50==0:
+                #  self.position=np.append(self.position,[[self.x_est[0],self.x_est[2],self.x_est[4]]],axis=0)
+                ax.scatter(position[0],position[1],position[2],c='r',marker='.')
+                sub=ax.scatter(self.x_est[0],self.x_est[2],self.x_est[4],c='dimgrey',s=100)
+                plt.pause(0.001)
+                sub.remove()
+                position=[self.x_est[0],self.x_est[2],self.x_est[4]]
+            count+=1
+            #  print self.x_est[0],self.x_est[2],self.x_est[4]
+            #  print self.Fb,self.m*self.g
+            #  sys.exit()
 
     def control_output(self,x,x_desired,con_type='position_hold'):
         """uses a previously computed gain K and F to 
@@ -300,10 +315,60 @@ class Controller(UKF):
         pass
 
 if __name__ == '__main__':
+    start=time.time()
     sub_control=Controller(['position_hold'])
-    sub_control.x_est=np.array([0,0,0,0,5,0,0,0,0,0,0,0])
-    points=[[0,0,0,0,20,0,0,0,0,0,0,0],[0,0,0,0,5,0,0,0,0,0,0,0]]
-    sub_control.sub_planner(points)
+    sub_control.position=np.zeros((1,3))
+    a=Automaton()
+    current=np.random.choice(['x13q0','x14q0','x17q0','x21q0','x22q0'])
+    for state in a.automata:
+        if len(current)==5:
+            name1=current[0:3]
+            name2=current[3:]
+        else:
+            name1=current[0:2]
+            name2=current[2:]
+        if (state['name1']==name1) and (state['name2']==name2):
+            start_point=state['location']
+            start_point=list(np.random.normal(start_point,2))
+            sub_control.position[0,:]=np.array(start_point)
+            sub_control.x_est=np.array([start_point[0],0,start_point[1],0,start_point[2],0,0,0,0,0,0,0])
+
+    fig=plt.figure()
+    ax=fig.add_subplot(111,projection='3d')
+    ax.scatter(15,5,5,s=75,marker='s',c='w')
+
+    y_top=np.linspace(3,7,100)
+    z_side=np.linspace(2,7,100)
+    x=3.5*np.ones(100)
+    y_side1=3*np.ones(100)
+    y_side2=7*np.ones(100)
+    z_top=2*np.ones(100)
+    ax.plot(x,y_top,z_top,label='Gate',c='k')
+    ax.plot(x,y_side1,z_side,c='k')
+    ax.plot(x,y_side2,z_side,c='k')
+
+    x=np.linspace(-2,18,10)
+    y=np.linspace(-2,12,10)
+    X,Y=np.meshgrid(x,y)
+    Z=0.5*np.ones((10,10))
+    ax.plot_surface(X,Y,Z,color='lightskyblue',alpha=0.25)
+
+    ax.set_xlim(-2,18)
+    ax.set_ylim(-2,12)
+    ax.set_zlim(-2,8)
+    ax.invert_zaxis()
+    ax.set_facecolor('lightskyblue')
+    while sub_control.x_est[4]>0.5:
+        current,point=a.planner(current,a.automata)
+        #  print current
+        sub_control.sub_planner([point[0],0,point[1],0,point[2],0,0,0,0,0,0,0])
+        #  ax.scatter(sub_control.position[:,0],sub_control.position[:,1],sub_control.position[:,2],c='r')
+        #  plt.pause(0.01)
+        #  print sub_control.x_est[0],sub_control.x_est[2],sub_control.x_est[4]
+    sub=ax.scatter(sub_control.x_est[0],sub_control.x_est[2],sub_control.x_est[4],c='dimgrey',s=100)
+    print time.time()-start
+    plt.show()
+    #  points=[[0,0,0,0,20,0,0,0,0,0,0,0],[0,0,0,0,5,0,0,0,0,0,0,0]]
     #  dt=1/25
     #  #position hold controller
 
