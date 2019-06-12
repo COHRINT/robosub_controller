@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import sys
 import copy
 
-def mask_image(image):
+def mask_image(image,graph=True):
     '''creates an image mask to compute area
     and distances'''
     #  fig,ax=skimage.filters.try_all_threshold(image)
@@ -13,8 +13,8 @@ def mask_image(image):
     thresh=skimage.filters.threshold_triangle(image)
     binary=image<thresh
     binary=binary.astype(int)
-    plt.imshow(binary,cmap='gray')
-    plt.show()
+    if graph:
+        plt.imshow(binary,cmap='gray')
     return binary
 
 def area(image,hor_dim):
@@ -33,7 +33,7 @@ def area(image,hor_dim):
     len_per_pixel=hor_dim/(end-start)
     return len_per_pixel*len_per_pixel*np.sum(image)
 
-def distance(image,hor_dim,hor_center,ver_center):
+def distance(image,hor_dim,hor_center,ver_center,graph=True):
     '''computes moment arm distance given by image
     hor_dim-the distance in desired units
     along the horizontal axis'''
@@ -98,6 +98,16 @@ def distance(image,hor_dim,hor_center,ver_center):
     right_arm=(right_pixel-middle_hor)*len_per_pixel
     #  print left_pixel,right_pixel
     #  print left_arm,right_arm
+
+    #graph
+    if graph:
+        plt.scatter(middle_hor,middle_ver,color='r',label='center of gravity')
+        plt.scatter(middle_hor-hor_adjustment,middle_ver-ver_adjustment,color='b',label='center of geometry')
+        plt.scatter(middle_hor,top_pixel,color='y')
+        plt.scatter(middle_hor,bottom_pixel,color='y')
+        plt.scatter(left_pixel,middle_ver,color='y')
+        plt.scatter(right_pixel,middle_ver,color='y')
+        plt.legend()
     return top_arm,bottom_arm,left_arm,right_arm
     
 
@@ -106,4 +116,6 @@ if __name__ == '__main__':
     pic=skimage.color.rgb2gray(pic)
     mask=mask_image(pic)
     square_area=area(mask,0.7773162)
+    #  top_arm,bottom_arm,left_arm,right_arm=distance(mask,0.7773162,0.001,-0.01)
     top_arm,bottom_arm,left_arm,right_arm=distance(mask,0.7773162,0.00254,-0.0375793)
+    plt.show()
