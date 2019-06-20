@@ -108,14 +108,17 @@ def distance(image,hor_dim,hor_center,ver_center,graph=True):
         plt.scatter(left_pixel,middle_ver,color='y')
         plt.scatter(right_pixel,middle_ver,color='y')
         plt.legend()
+    print [len_per_pixel*len_per_pixel*x for x in [top_area,bottom_area,left_area,right_area]]
     return top_arm,bottom_arm,left_arm,right_arm
     
 
 if __name__ == '__main__':
-    pic=skimage.io.imread('x_dim.PNG')
+    pic=skimage.io.imread('z_dim.PNG')
     pic=skimage.color.rgb2gray(pic)
     mask=mask_image(pic)
-    square_area=area(mask,0.7773162)
-    #  top_arm,bottom_arm,left_arm,right_arm=distance(mask,0.7773162,0.001,-0.01)
-    top_arm,bottom_arm,left_arm,right_arm=distance(mask,0.7773162,0.00254,-0.0375793)
+    square_area=area(mask,0.781558)
+    #  print square_area
+    #  top_arm,bottom_arm,left_arm,right_arm=distance(mask,0.781558,0.00292,-0.02146)
+    top_arm,bottom_arm,left_arm,right_arm=distance(mask,0.781558,0.00491,-0.00292)
+    print top_arm,bottom_arm,left_arm,right_arm
     plt.show()

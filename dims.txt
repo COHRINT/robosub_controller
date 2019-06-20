@@ -1,0 +1,21 @@
+Mass = 44.34 lbs
+Buoyancy Mass: 61.56 lbs
+COM:
+x: 15.46 in from +x side, 15.22 in from -x side
+y: 15.27 in from -y side, 15.53 in from +y side
+z: 7.6 in from top, 9.33 in from bottom
+
+COB z: 8.404 in from bottom
+
+Ixx: .5209 kg m^2
+Iyy: .5205 kg m^2
+Izz: .8677 kg m^2
+
+length: 30.77 in
+height 16.89 in
+
+Cd X/Y: 0.296543
+Force in X/Y: 20.356 N
+
+Cd Z: 0.406281
+Force in Z: 53.7332 N
